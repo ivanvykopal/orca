@@ -151,6 +151,7 @@ export function RemoteServerFields({
   useVsCodeTunnel,
   tunnelUrl,
   tunnelAccessToken,
+  serverError,
   onUseVsCodeTunnelChange,
   onTunnelUrlChange,
   onTunnelAccessTokenChange,
@@ -167,6 +168,7 @@ export function RemoteServerFields({
   useVsCodeTunnel: boolean
   tunnelUrl: string
   tunnelAccessToken: string
+  serverError: string | null
   onUseVsCodeTunnelChange: (value: boolean) => void
   onTunnelUrlChange: (value: string) => void
   onTunnelAccessTokenChange: (value: string) => void
@@ -330,6 +332,11 @@ export function RemoteServerFields({
             </label>
           ) : null}
         </div>
+      ) : null}
+      {serverError ? (
+        <p id="add-server-save-error" role="alert" className="text-xs text-destructive">
+          {serverError}
+        </p>
       ) : null}
       {loopbackBlocked ? (
         <p id="add-server-loopback-blocked" role="alert" className="text-xs text-destructive">

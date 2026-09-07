@@ -12,6 +12,7 @@ export function AddRemoteHostServerFormPanel({
   useVsCodeTunnel,
   tunnelUrl,
   tunnelAccessToken,
+  serverError,
   disabled,
   canSubmit,
   onNameChange,
@@ -30,6 +31,7 @@ export function AddRemoteHostServerFormPanel({
   useVsCodeTunnel: boolean
   tunnelUrl: string
   tunnelAccessToken: string
+  serverError: string | null
   disabled: boolean
   canSubmit: boolean
   onNameChange: (value: string) => void
@@ -70,6 +72,7 @@ export function AddRemoteHostServerFormPanel({
         useVsCodeTunnel={useVsCodeTunnel}
         tunnelUrl={tunnelUrl}
         tunnelAccessToken={tunnelAccessToken}
+        serverError={serverError}
         onUseVsCodeTunnelChange={onUseVsCodeTunnelChange}
         onTunnelUrlChange={onTunnelUrlChange}
         onTunnelAccessTokenChange={onTunnelAccessTokenChange}
