@@ -168,7 +168,9 @@ export function stageWindowsProcessTreeNodeAddonApiHeaders(
   packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR
 ) {
   const nodeAddonApiDir = dirname(
-    createRequire(join(packageDir, 'package.json')).resolve('node-addon-api/package.json')
+    createRequire(join(realpathSync(packageDir), 'package.json')).resolve(
+      'node-addon-api/package.json'
+    )
   )
   const stagedHeaderDir = join(packageDir, 'deps', 'node-addon-api')
   mkdirSync(stagedHeaderDir, { recursive: true })

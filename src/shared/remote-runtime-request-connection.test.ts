@@ -39,7 +39,7 @@ afterEach(async () => {
 })
 
 describe('RemoteRuntimeRequestConnection', () => {
-  it('sends the tunnel access token as a Bearer header on the upgrade', async () => {
+  it('sends the tunnel access token in the X-Tunnel-Authorization header on the upgrade', async () => {
     const server = await createServer()
     const connection = new RemoteRuntimeRequestConnection({
       ...server.pairing,
@@ -48,7 +48,7 @@ describe('RemoteRuntimeRequestConnection', () => {
 
     await connection.request('status.get', undefined, 1000)
 
-    expect(server.upgradeAuthorizations).toEqual(['Bearer tunnel-token'])
+    expect(server.upgradeAuthorizations).toEqual(['tunnel tunnel-token'])
 
     connection.close()
   })
@@ -119,7 +119,7 @@ async function createServer(): Promise<TestServer> {
   servers.push(wss)
 
   wss.on('connection', (ws, request) => {
-    upgradeAuthorizations.push(request.headers.authorization)
+    upgradeAuthorizations.push(request.headers['x-tunnel-authorization'])
     connectionCount += 1
     let sharedKey: Uint8Array | null = null
     let authenticated = false

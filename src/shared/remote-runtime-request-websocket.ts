@@ -124,7 +124,7 @@ function createSocket(
       ws: new WebSocket(
         pairing.endpoint,
         pairing.tunnelAccessToken
-          ? { headers: { authorization: `Bearer ${pairing.tunnelAccessToken}` } }
+          ? { headers: { 'x-tunnel-authorization': `tunnel ${pairing.tunnelAccessToken}` } }
           : undefined
       ),
       keyPair
