@@ -2,6 +2,10 @@ import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fi
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { defineMethod, type RpcMethod } from '../core'
 import { PRBotAuthorOverrideUpdate, SettingsUpdate } from './client-settings-schemas'
+import {
+  projectClientPermissionSettings,
+  protectClientPermissionUpdate
+} from './client-permission-projection'
 import { FeatureInteractionIdParam, UiUpdate } from './client-ui-schemas'
 // Type-only side effect: keeps the schema/PersistedUIState parity assertions in
 // the typecheck graph so drift fails the build instead of a paired client.
@@ -12,13 +16,18 @@ export const CLIENT_UI_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'settings.get',
     params: null,
-    handler: (_params, { runtime }) => ({ settings: runtime.getClientSettings() })
+    handler: (_params, context) => ({
+      settings: projectClientPermissionSettings(context.runtime.getClientSettings(), context)
+    })
   }),
   defineMethod({
     name: 'settings.update',
     params: SettingsUpdate,
-    handler: async (params, { runtime }) => ({
-      settings: await runtime.updateClientSettings(params)
+    handler: async (params, context) => ({
+      settings: projectClientPermissionSettings(
+        await context.runtime.updateClientSettings(protectClientPermissionUpdate(params, context)),
+        context
+      )
     })
   }),
   defineMethod({
@@ -40,8 +49,11 @@ export const CLIENT_UI_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'settings.updatePRBotAuthorOverride',
     params: PRBotAuthorOverrideUpdate,
-    handler: (params, { runtime }) => ({
-      settings: runtime.updateClientPRBotAuthorOverride(params)
+    handler: (params, context) => ({
+      settings: projectClientPermissionSettings(
+        context.runtime.updateClientPRBotAuthorOverride(params),
+        context
+      )
     })
   }),
   defineMethod({
