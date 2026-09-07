@@ -140,7 +140,12 @@ function createSocket(
       ws: new WebSocket(
         pairing.endpoint,
         remoteRuntimeConnectOptions(
-          { maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES },
+          {
+            maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES,
+            ...(pairing.tunnelAccessToken
+              ? { headers: { authorization: `Bearer ${pairing.tunnelAccessToken}` } }
+              : {})
+          },
           connectTimeoutMs
         )
       ),

@@ -3,10 +3,16 @@ import { parsePairingCode, type PairingOffer } from './pairing'
 import { classifyRemotePairingHostname } from './remote-pairing-address'
 import { isProfileRuntimePublicKey } from './runtime-e2ee-keypair-file'
 import {
+  applyVsCodeTunnelToPairingOffer,
+  getExistingVsCodeTunnelConfig,
+  type VsCodeTunnelConfig
+} from './vscode-tunnel-pairing'
+import {
   createEnvironmentFromPairingOffer,
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment,
   type PersistedRuntimeEnvironment,
+  type RuntimeConnectionDependency,
   type RuntimeEnvironmentSource
 } from './runtime-environments'
 import {
@@ -38,10 +44,12 @@ export function addEnvironmentFromPairingCode(
     pairingCode: string
     now?: number
     source?: RuntimeEnvironmentSource
-    connectionDependency?: 'ssh-tunnel'
+    connectionDependency?: RuntimeConnectionDependency
+    vsCodeTunnel?: VsCodeTunnelConfig
   }
 ): KnownRuntimeEnvironment {
   const offer = parseRemotePairingCode(userDataPath, args.pairingCode)
+  const tunneledOffer = applyVsCodeTunnelToStoreOffer(offer, args.vsCodeTunnel)
   const store = readPersistedEnvironmentStore(userDataPath)
   const now = args.now ?? Date.now()
   const existing = store.environments.find((entry) => entry.name === args.name)
@@ -55,10 +63,12 @@ export function addEnvironmentFromPairingCode(
     id: randomUUID(),
     name: args.name,
     now,
-    offer,
+    offer: tunneledOffer,
     runtimeId: null,
     ...(args.source ? { source: args.source } : {}),
-    ...getPairingConnectionDependency(args.connectionDependency, offer)
+    ...(args.vsCodeTunnel
+      ? { connectionDependency: 'code-tunnel' as const }
+      : getPairingConnectionDependency(args.connectionDependency, tunneledOffer))
   })
   const next = {
     version: 1 as const,
@@ -114,14 +124,23 @@ export function updateEnvironmentFromPairingCode(
   const existing = resolveEnvironmentFromStore(store, selector)
   const now = args.now ?? Date.now()
   const previousPairingRevision = existing.pairingRevision ?? existing.createdAt
+  // Why: re-pairing a tunnel environment must keep the tunnel; the fresh link
+  // only carries the loopback endpoint of the relay on the remote machine.
+  const existingTunnel = getExistingVsCodeTunnelConfig(
+    existing.endpoints.find((entry) => entry.id === existing.preferredEndpointId) ??
+      existing.endpoints[0] ?? { endpoint: '' }
+  )
+  const tunneledOffer = applyVsCodeTunnelToStoreOffer(offer, existingTunnel ?? undefined)
   const environment = createEnvironmentFromPairingOffer({
     id: existing.id,
     name: existing.name,
     now: existing.createdAt,
-    offer,
+    offer: tunneledOffer,
     runtimeId: existing.runtimeId,
     ...(existing.source ? { source: existing.source } : {}),
-    ...getPairingConnectionDependency(existing.connectionDependency, offer)
+    ...(existingTunnel
+      ? { connectionDependency: 'code-tunnel' as const }
+      : getPairingConnectionDependency(existing.connectionDependency, tunneledOffer))
   })
   const next = {
     ...environment,
@@ -140,9 +159,9 @@ export function updateEnvironmentFromPairingCode(
 }
 
 function getPairingConnectionDependency(
-  dependency: 'ssh-tunnel' | undefined,
+  dependency: RuntimeConnectionDependency | undefined,
   offer: PairingOffer
-): { connectionDependency?: 'ssh-tunnel' } {
+): { connectionDependency?: RuntimeConnectionDependency } {
   if (!dependency) {
     return {}
   }
@@ -154,6 +173,20 @@ function getPairingConnectionDependency(
   } catch {
     return {}
   }
+}
+
+function applyVsCodeTunnelToStoreOffer(
+  offer: PairingOffer,
+  tunnel: VsCodeTunnelConfig | undefined
+): PairingOffer {
+  if (!tunnel) {
+    return offer
+  }
+  const result = applyVsCodeTunnelToPairingOffer(offer, tunnel)
+  if (!result.ok) {
+    throw new RuntimeEnvironmentStoreError('invalid_argument', result.message)
+  }
+  return result.offer
 }
 
 export function resolveEnvironment(

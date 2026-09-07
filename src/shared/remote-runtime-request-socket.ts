@@ -188,7 +188,10 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
 
     try {
       const connectOptions = remoteRuntimeConnectOptions({
-        maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES
+        maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES,
+        ...(pairing.tunnelAccessToken
+          ? { headers: { authorization: `Bearer ${pairing.tunnelAccessToken}` } }
+          : {})
       })
       ws = new WebSocket(pairing.endpoint, connectOptions)
     } catch (error) {

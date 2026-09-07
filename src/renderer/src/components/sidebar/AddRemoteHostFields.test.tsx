@@ -27,6 +27,12 @@ describe('RemoteServerFields', () => {
         onPairingCodeChange={vi.fn()}
         allowLoopback={false}
         onAllowLoopbackChange={vi.fn()}
+        useVsCodeTunnel={false}
+        tunnelUrl=""
+        tunnelAccessToken=""
+        onUseVsCodeTunnelChange={vi.fn()}
+        onTunnelUrlChange={vi.fn()}
+        onTunnelAccessTokenChange={vi.fn()}
         onSubmit={vi.fn()}
       />
     )
@@ -34,5 +40,40 @@ describe('RemoteServerFields', () => {
     expect(markup).toContain('aria-invalid="true"')
     expect(markup).toContain('aria-describedby="add-server-loopback-blocked"')
     expect(markup).toContain('id="add-server-loopback-blocked"')
+  })
+
+  it('renders the VS Code tunnel inputs only when the tunnel is enabled', () => {
+    const pairingCode = loopbackAccessLink()
+    const base = {
+      name: 'Remote workstation',
+      pairingCode,
+      parsedLink: parseHostAccessLink(pairingCode),
+      disabled: false,
+      onNameChange: vi.fn(),
+      onPairingCodeChange: vi.fn(),
+      allowLoopback: false,
+      onAllowLoopbackChange: vi.fn(),
+      onUseVsCodeTunnelChange: vi.fn(),
+      onTunnelUrlChange: vi.fn(),
+      onTunnelAccessTokenChange: vi.fn(),
+      onSubmit: vi.fn()
+    }
+    const withTunnelOff = renderToStaticMarkup(
+      <RemoteServerFields {...base} useVsCodeTunnel={false} tunnelUrl="" tunnelAccessToken="" />
+    )
+    const withTunnelOn = renderToStaticMarkup(
+      <RemoteServerFields
+        {...base}
+        useVsCodeTunnel={true}
+        tunnelUrl="https://my-box-39271.devtunnels.ms"
+        tunnelAccessToken="secret"
+      />
+    )
+
+    expect(withTunnelOff).not.toContain('add-server-tunnel-url')
+    expect(withTunnelOn).toContain('add-server-tunnel-url')
+    expect(withTunnelOn).toContain('add-server-tunnel-token')
+    expect(withTunnelOn).toContain('Connect through a VS Code tunnel')
+    expect(withTunnelOn).toContain('secret')
   })
 })

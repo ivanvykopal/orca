@@ -19,6 +19,7 @@ type TestServer = {
   requests: unknown[]
   auths: unknown[]
   connectionCount: () => number
+  upgradeAuthorizations: (string | undefined)[]
 }
 
 const servers: WebSocketServer[] = []
@@ -38,6 +39,20 @@ afterEach(async () => {
 })
 
 describe('RemoteRuntimeRequestConnection', () => {
+  it('sends the tunnel access token as a Bearer header on the upgrade', async () => {
+    const server = await createServer()
+    const connection = new RemoteRuntimeRequestConnection({
+      ...server.pairing,
+      tunnelAccessToken: 'tunnel-token'
+    })
+
+    await connection.request('status.get', undefined, 1000)
+
+    expect(server.upgradeAuthorizations).toEqual(['Bearer tunnel-token'])
+
+    connection.close()
+  })
+
   it('reuses one encrypted WebSocket for multiple one-shot RPCs', async () => {
     const server = await createServer()
     const connection = new RemoteRuntimeRequestConnection(server.pairing)
@@ -95,14 +110,16 @@ describe('RemoteRuntimeRequestConnection', () => {
 
 async function createServer(): Promise<TestServer> {
   const serverKeyPair = generateKeyPair()
-  const requests: unknown[] = []
   const auths: unknown[] = []
+  const requests: unknown[] = []
+  const upgradeAuthorizations: (string | undefined)[] = []
   let connectionCount = 0
   // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
   const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
   servers.push(wss)
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, request) => {
+    upgradeAuthorizations.push(request.headers.authorization)
     connectionCount += 1
     let sharedKey: Uint8Array | null = null
     let authenticated = false
@@ -174,6 +191,7 @@ async function createServer(): Promise<TestServer> {
     pairing,
     requests,
     auths,
+    upgradeAuthorizations,
     connectionCount: () => connectionCount
   }
 }
