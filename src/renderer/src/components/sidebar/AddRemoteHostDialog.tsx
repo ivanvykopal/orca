@@ -290,7 +290,7 @@ export function AddRemoteHostDialog({
             ? result.message
             : translateRemotePairingFailureDescription(
                 result.kind,
-                parsedServerLink.value.displayEndpoint
+                useVsCodeTunnel ? tunnelUrl.trim() : parsedServerLink.value.displayEndpoint
               )
         )
         return
