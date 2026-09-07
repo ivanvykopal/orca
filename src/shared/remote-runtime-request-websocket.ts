@@ -119,7 +119,16 @@ function createSocket(
     }
   }
   try {
-    return { ok: true, ws: new WebSocket(pairing.endpoint), keyPair }
+    return {
+      ok: true,
+      ws: new WebSocket(
+        pairing.endpoint,
+        pairing.tunnelAccessToken
+          ? { headers: { authorization: `Bearer ${pairing.tunnelAccessToken}` } }
+          : undefined
+      ),
+      keyPair
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     return {

@@ -317,6 +317,101 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(result.environment).not.toHaveProperty('connectionDependency')
   })
 
+  it('verifies and saves through a VS Code tunnel', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: runtimeStatus(),
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const verifyAndAdd = handler<
+      {
+        name: string
+        pairingCode: string
+        vsCodeTunnel?: { url: string; accessToken: string }
+      },
+      { ok: boolean; environment?: { name: string; connectionDependency?: string } }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    const result = await verifyAndAdd(null, {
+      name: 'desk',
+      pairingCode: pairingCode(),
+      vsCodeTunnel: {
+        url: 'https://my-box-39271.devtunnels.ms',
+        accessToken: 'tunnel-token'
+      }
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      environment: { name: 'desk', connectionDependency: 'code-tunnel' }
+    })
+    expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: 'wss://my-box-39271.devtunnels.ms/',
+        tunnelAccessToken: 'tunnel-token'
+      }),
+      'status.get',
+      undefined,
+      15_000,
+      undefined,
+      undefined,
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+    )
+    const stored = environmentStore.listEnvironments(userDataPath)
+    expect(stored).toHaveLength(1)
+    expect(stored[0]!.endpoints[0]).toMatchObject({
+      endpoint: 'wss://my-box-39271.devtunnels.ms/',
+      tunnelAccessToken: 'tunnel-token'
+    })
+    // Why: the tunnel token is a secret on par with the device token.
+    expect(JSON.stringify(result)).not.toContain('tunnel-token')
+  })
+
+  it('rejects a VS Code tunnel without an access token before connecting', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const verifyAndAdd = handler<
+      {
+        name: string
+        pairingCode: string
+        vsCodeTunnel?: { url: string; accessToken: string }
+      },
+      { ok: boolean; kind?: string; message?: string }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    await expect(
+      verifyAndAdd(null, {
+        name: 'desk',
+        pairingCode: pairingCode(),
+        vsCodeTunnel: { url: 'https://my-box-39271.devtunnels.ms', accessToken: '' }
+      })
+    ).resolves.toMatchObject({ ok: false, kind: 'access-link-invalid' })
+    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
+    expect(environmentStore.listEnvironments(userDataPath)).toEqual([])
+  })
+
+  it('keeps the tunnel when a saved environment is re-paired', async () => {
+    environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+      name: 'desk',
+      pairingCode: pairingCode(),
+      vsCodeTunnel: {
+        url: 'https://my-box-39271.devtunnels.ms',
+        accessToken: 'tunnel-token'
+      }
+    })
+
+    const updated = environmentStore.updateEnvironmentFromPairingCode(userDataPath, 'desk', {
+      pairingCode: pairingCode('ws://127.0.0.1:6768')
+    })
+
+    expect(updated.connectionDependency).toBe('code-tunnel')
+    expect(updated.endpoints[0]).toMatchObject({
+      endpoint: 'wss://my-box-39271.devtunnels.ms/',
+      tunnelAccessToken: 'tunnel-token'
+    })
+  })
+
   it.each([
     [{ protocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION - 1 }, 'protocol-incompatible'],
     [{ protocolVersion: 999_999, deviceScope: 'mobile' }, 'access-link-invalid'],

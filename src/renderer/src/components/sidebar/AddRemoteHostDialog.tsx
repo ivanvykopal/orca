@@ -56,6 +56,9 @@ export function AddRemoteHostDialog({
   const [serverName, setServerName] = useState('')
   const [pairingCode, setPairingCode] = useState('')
   const [allowLoopback, setAllowLoopback] = useState(false)
+  const [useVsCodeTunnel, setUseVsCodeTunnel] = useState(false)
+  const [tunnelUrl, setTunnelUrl] = useState('')
+  const [tunnelAccessToken, setTunnelAccessToken] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const configSearchGeneration = useRef(0)
   const configSearchQuery = useRef('')
@@ -64,7 +67,8 @@ export function AddRemoteHostDialog({
   const serverFormCanSubmit =
     serverName.trim() !== '' &&
     parsedServerLink.ok &&
-    (parsedServerLink.value.endpointKind !== 'loopback' || allowLoopback)
+    (!useVsCodeTunnel || (tunnelUrl.trim() !== '' && tunnelAccessToken.trim() !== '')) &&
+    (parsedServerLink.value.endpointKind !== 'loopback' || allowLoopback || useVsCodeTunnel)
   const setSshTargetsMetadata = useAppStore((s) => s.setSshTargetsMetadata)
   const recordSshRepoReadoptions = useAppStore((s) => s.recordSshRepoReadoptions)
   const setRuntimeEnvironments = useAppStore((s) => s.setRuntimeEnvironments)
@@ -95,8 +99,10 @@ export function AddRemoteHostDialog({
     setServerName('')
     setPairingCode('')
     setAllowLoopback(false)
+    setUseVsCodeTunnel(false)
+    setTunnelUrl('')
+    setTunnelAccessToken('')
   }
-
   const close = () => {
     // Why: a stuck resolve must not trap the dialog open — reset() invalidates it instead.
     if (isSaving || isBulkImporting) {
@@ -253,7 +259,7 @@ export function AddRemoteHostDialog({
       toast.error(translateHostAccessLinkError(parsedServerLink.kind))
       return
     }
-    if (parsedServerLink.value.endpointKind === 'loopback' && !allowLoopback) {
+    if (parsedServerLink.value.endpointKind === 'loopback' && !allowLoopback && !useVsCodeTunnel) {
       toast.error(
         translate(
           'auto.components.sidebar.AddRemoteHostDialog.loopbackBlocked',
@@ -268,7 +274,15 @@ export function AddRemoteHostDialog({
       const result = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
         name: trimmedName,
         pairingCode: trimmedPairingCode,
-        allowLoopback
+        allowLoopback,
+        ...(useVsCodeTunnel
+          ? {
+              vsCodeTunnel: {
+                url: tunnelUrl.trim(),
+                accessToken: tunnelAccessToken.trim()
+              }
+            }
+          : {})
       })
       if (!result.ok) {
         toast.error(
@@ -359,6 +373,9 @@ export function AddRemoteHostDialog({
             pairingCode={pairingCode}
             parsedLink={parsedServerLink}
             allowLoopback={allowLoopback}
+            useVsCodeTunnel={useVsCodeTunnel}
+            tunnelUrl={tunnelUrl}
+            tunnelAccessToken={tunnelAccessToken}
             disabled={busy}
             canSubmit={serverFormCanSubmit}
             onNameChange={setServerName}
@@ -367,6 +384,9 @@ export function AddRemoteHostDialog({
               setAllowLoopback(false)
             }}
             onAllowLoopbackChange={setAllowLoopback}
+            onUseVsCodeTunnelChange={setUseVsCodeTunnel}
+            onTunnelUrlChange={setTunnelUrl}
+            onTunnelAccessTokenChange={setTunnelAccessToken}
             onSubmit={() => void saveRemoteServer()}
             onCancel={close}
           />

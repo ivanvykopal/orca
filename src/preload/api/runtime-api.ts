@@ -14,6 +14,7 @@ import type {
   BrowserPageCreationPlacement
 } from '../../shared/browser-client-host-placement'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime-shared-control-types'
+import type { VsCodeTunnelConfig } from '../../shared/vscode-tunnel-pairing'
 
 export type RuntimeEnvironmentSubscriptionHandle = {
   unsubscribe: () => void
@@ -86,6 +87,7 @@ export type RuntimeApi = {
       name: string
       pairingCode: string
       allowLoopback?: boolean
+      vsCodeTunnel?: VsCodeTunnelConfig
     }) => Promise<VerifyAndAddRuntimeEnvironmentResult>
     resolve: (args: { selector: string }) => Promise<PublicKnownRuntimeEnvironment>
     remove: (args: { selector: string }) => Promise<{ removed: PublicKnownRuntimeEnvironment }>

@@ -12,6 +12,7 @@ import {
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 import { RuntimeRpcCallQueueOverloadError } from '../../shared/runtime-rpc-call-queue'
 import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type { VsCodeTunnelConfig } from '../../shared/vscode-tunnel-pairing'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { Store } from '../persistence'
 import { clearBrowserRoutePartitionStorageForEnvironment } from '../browser/browser-route-partition-storage-runtime'
@@ -76,7 +77,15 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   )
   ipcMain.handle(
     'runtimeEnvironments:verifyAndAddFromPairingCode',
-    async (_event, args: { name: string; pairingCode: string; allowLoopback?: boolean }) => {
+    async (
+      _event,
+      args: {
+        name: string
+        pairingCode: string
+        allowLoopback?: boolean
+        vsCodeTunnel?: VsCodeTunnelConfig
+      }
+    ) => {
       const result = await verifyAndAddRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
       if (result.ok) {
         clearRuntimeEnvironmentManualDisconnect(result.environment.id)

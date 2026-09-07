@@ -11,12 +11,17 @@ import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-err
 import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
 import { redactRuntimeEnvironment } from '../../shared/runtime-environments'
+import {
+  applyVsCodeTunnelToPairingOffer,
+  type VsCodeTunnelConfig
+} from '../../shared/vscode-tunnel-pairing'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 
 type VerifyAndAddRuntimeEnvironmentArgs = {
   name: string
   pairingCode: string
   allowLoopback?: boolean
+  vsCodeTunnel?: VsCodeTunnelConfig
 }
 
 export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
@@ -27,7 +32,19 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   if (!parsed.ok) {
     return { ok: false, kind: 'access-link-invalid', message: parsed.message }
   }
-  if (parsed.value.endpointKind === 'loopback' && !args.allowLoopback) {
+  // Why: a tunnel offer's relay endpoint is loopback on the remote machine by design;
+  // the rewrite replaces it with the tunnel URL before anything connects.
+  const tunnel = args.vsCodeTunnel
+    ? applyVsCodeTunnelToPairingOffer(parsed.value.pairing, args.vsCodeTunnel)
+    : null
+  if (tunnel && !tunnel.ok) {
+    return { ok: false, kind: 'access-link-invalid', message: tunnel.message }
+  }
+  const effectivePairing = tunnel?.ok ? tunnel.offer : parsed.value.pairing
+  const displayEndpoint = tunnel?.ok
+    ? new URL(tunnel.offer.endpoint).host
+    : parsed.value.displayEndpoint
+  if (parsed.value.endpointKind === 'loopback' && !args.allowLoopback && !tunnel) {
     return {
       ok: false,
       kind: 'host-unreachable',
@@ -38,7 +55,7 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   let runtimeStatus: RuntimeStatus
   try {
     const response = await sendRemoteRuntimeRequest<RuntimeStatus>(
-      parsed.value.pairing,
+      effectivePairing,
       'status.get',
       undefined,
       15_000,
@@ -59,10 +76,11 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
     }
     runtimeStatus = statusVerification.runtimeStatus
   } catch (error) {
-    return classifyPairingVerificationError(error, parsed.value.displayEndpoint)
+    return classifyPairingVerificationError(error, displayEndpoint)
   }
 
-  const usesSshTunnel = parsed.value.endpointKind === 'loopback' && args.allowLoopback === true
+  const usesSshTunnel =
+    !tunnel && parsed.value.endpointKind === 'loopback' && args.allowLoopback === true
   let environment: ReturnType<typeof addEnvironmentFromPairingCode>
   try {
     environment = addEnvironmentFromPairingCode(userDataPath, {

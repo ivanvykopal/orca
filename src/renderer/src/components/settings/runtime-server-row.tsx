@@ -109,12 +109,17 @@ export function RuntimeServerRow({
                 'auto.components.settings.RuntimeEnvironmentsPane.sshTunnelRequired',
                 'SSH tunnel required'
               )
-            : isActive
+            : environment.connectionDependency === 'code-tunnel'
               ? translate(
-                  'auto.components.settings.RuntimeEnvironmentsPane.activeServerRowHelp',
-                  'Active server for server-routed projects, terminals, and provider checks.'
+                  'auto.components.settings.RuntimeEnvironmentsPane.vscodeTunnelRequired',
+                  'VS Code tunnel required'
                 )
-              : getHostDetailsSummary(effectiveDetails)}
+              : isActive
+                ? translate(
+                    'auto.components.settings.RuntimeEnvironmentsPane.activeServerRowHelp',
+                    'Active server for server-routed projects, terminals, and provider checks.'
+                  )
+                : getHostDetailsSummary(effectiveDetails)}
         </p>
         {detailsDescription ? (
           <p
