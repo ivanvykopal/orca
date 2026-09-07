@@ -119,7 +119,8 @@ async function createServer(): Promise<TestServer> {
   servers.push(wss)
 
   wss.on('connection', (ws, request) => {
-    upgradeAuthorizations.push(request.headers['x-tunnel-authorization'])
+    const tunnelAuth = request.headers['x-tunnel-authorization']
+    upgradeAuthorizations.push(Array.isArray(tunnelAuth) ? tunnelAuth[0] : tunnelAuth)
     connectionCount += 1
     let sharedKey: Uint8Array | null = null
     let authenticated = false
