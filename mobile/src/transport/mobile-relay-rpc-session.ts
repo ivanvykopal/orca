@@ -9,6 +9,7 @@ import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
+import { RelayDialStageLog } from './relay-dial-stage-log'
 import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-stage'
 import { RelayPendingRequests } from './relay-pending-requests'
 import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
@@ -58,6 +59,7 @@ export function connectMobileRelayRpcSession(args: {
   const logSessionId = `${Date.now().toString(36)}-${(++relayRpcSessionSequence).toString(36)}`
   const livenessIdentity = {}
   const dialStage = new RelayDialStageTracker()
+  const dialStageLog = new RelayDialStageLog(dialStage, logSessionId, args.onLog)
   const streams = new MobileRelayRpcStreams({
     nextId: () => pending.nextId(),
     sendFrame,
@@ -72,7 +74,7 @@ export function connectMobileRelayRpcSession(args: {
     desktopPublicKeyB64: args.desktopPublicKeyB64,
     createSocket: args.createSocket,
     onHostCloseReason: args.onHostCloseReason,
-    onOpen: () => dialStage.advance('awaiting-hello'),
+    onOpen: () => dialStageLog.enter('awaiting-hello'),
     onHello: (hello) => {
       if (
         hello.credentialKind !== 'resume' ||
@@ -83,7 +85,7 @@ export function connectMobileRelayRpcSession(args: {
       }
       attachDeadlineAt = hello.leaseExpiresAt
       resumeExpiresAt = hello.resumeExpiresAt
-      dialStage.advance('handshaking')
+      dialStageLog.enter('handshaking')
       publishState('handshaking')
     },
     onAuthenticated: () => void confirmResume(),
@@ -133,6 +135,7 @@ export function connectMobileRelayRpcSession(args: {
         return
       }
       closed = true
+      dialStageLog.settle(false)
       livenessWatchdog.stop(livenessIdentity)
       link.close()
       pending.rejectAll(new Error('Client closed'))
@@ -171,7 +174,7 @@ export function connectMobileRelayRpcSession(args: {
   return client
 
   async function confirmResume(): Promise<void> {
-    dialStage.advance('confirming')
+    dialStageLog.enter('confirming')
     try {
       const response = await sendRpc(
         'pairing.getEndpoints',
@@ -194,6 +197,7 @@ export function connectMobileRelayRpcSession(args: {
         sendRpc(method, params, requestTimeoutMs, true)
       )
       livenessWatchdog.start(livenessIdentity)
+      dialStageLog.settle(true)
       publishState('connected')
     } catch (error) {
       fail(asError(error))
@@ -293,6 +297,7 @@ export function connectMobileRelayRpcSession(args: {
     }
     closed = true
     failure = error
+    dialStageLog.settle(false, error.message)
     livenessWatchdog.stop(livenessIdentity)
     streams.clear()
     link.close()
