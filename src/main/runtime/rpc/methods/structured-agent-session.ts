@@ -10,6 +10,10 @@ import {
   computeAgentSessionPayloadFingerprint
 } from '../../../../shared/agent-session-mutation-envelope'
 import type { z } from 'zod'
+import {
+  projectBackgroundTaskEvent,
+  projectBackgroundTaskHistory
+} from './structured-agent-session-background-task-capability'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
 import {
   ensureStructuredHostInstalled as ensureHostInstalled,
@@ -46,6 +50,7 @@ import {
   HandoffStatusParams,
   OptionsParams,
   RespondParams,
+  RewindParams,
   SendParams,
   SetOptionParams,
   SubscribeParams,
@@ -82,6 +87,15 @@ async function attachClientSuppliedLocation(
 }
 
 export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
+  defineMethod({
+    name: 'agentSession.rewind',
+    params: RewindParams,
+    handler: async (params, ctx) => {
+      requireStructuredCapability(ctx)
+      await ensureHostInstalled(ctx)
+      return requireHost(ctx).rewind(callerFor(ctx), params)
+    }
+  }),
   defineMethod({
     name: 'agentSession.conversationCommand',
     params: ConversationCommandParams,
@@ -241,7 +255,8 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'agentSession.history',
     params: HistoryParams,
-    handler: async (params, ctx) => requireHost(ctx).history(params)
+    handler: async (params, ctx) =>
+      projectBackgroundTaskHistory(requireHost(ctx).history(params), ctx)
   }),
   defineStreamingMethod({
     name: 'agentSession.subscribe',
@@ -268,7 +283,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
       dispose = host.subscribe({
         id: subscriptionId,
         sessionId: params.sessionId,
-        emit,
+        emit: (event) => emit(projectBackgroundTaskEvent(event, ctx)),
         ...(params.cursor ? { cursor: params.cursor } : {})
       })
       if (stream.isClosed()) {

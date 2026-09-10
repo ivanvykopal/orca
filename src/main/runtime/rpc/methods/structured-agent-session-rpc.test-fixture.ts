@@ -97,6 +97,7 @@ function statusFeed(): StructuredAgentSessionStatusFeed {
         {
           journal: {
             isReadOnly: false,
+            cursor: () => ({ epoch: 'epoch-status', sequence: 2 }),
             lastActivityAt: () => 2,
             snapshot: () => ({ items: STATUS_ITEMS })
           } as unknown as AgentSessionJournal,
@@ -139,6 +140,7 @@ export function hostStub(): StructuredAgentSessionHost {
         unconfirmedClientMessageIds: []
       }
     })),
+    rewind: vi.fn(async () => ({ ok: true, value: { itemId: 'chosen', epoch: 'next' } })),
     send: vi.fn(async () => ({ ok: true, replayed: false })),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     close: vi.fn(async () => undefined),
