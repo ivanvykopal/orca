@@ -89,6 +89,12 @@ export type RuntimeApi = {
       allowLoopback?: boolean
       vsCodeTunnel?: VsCodeTunnelConfig
     }) => Promise<VerifyAndAddRuntimeEnvironmentResult>
+    updateFromPairingCode: (args: {
+      selector: string
+      pairingCode?: string
+      allowLoopback?: boolean
+      vsCodeTunnel?: VsCodeTunnelConfig
+    }) => Promise<VerifyAndAddRuntimeEnvironmentResult>
     resolve: (args: { selector: string }) => Promise<PublicKnownRuntimeEnvironment>
     remove: (args: { selector: string }) => Promise<{ removed: PublicKnownRuntimeEnvironment }>
     disconnect: (args: {

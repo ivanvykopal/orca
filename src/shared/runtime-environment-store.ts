@@ -109,26 +109,35 @@ export function removeEnvironment(userDataPath: string, selector: string): Known
 export function updateEnvironmentFromPairingCode(
   userDataPath: string,
   selector: string,
-  args: { pairingCode: string; now?: number }
+  args: {
+    pairingCode?: string
+    vsCodeTunnel?: VsCodeTunnelConfig
+    now?: number
+  }
 ): KnownRuntimeEnvironment {
-  const offer = parsePairingCode(args.pairingCode)
+  const store = readEnvironmentStore(userDataPath)
+  const existing = resolveEnvironmentFromStore(store, selector)
+  const offer = args.pairingCode
+    ? parsePairingCode(args.pairingCode)
+    : getPreferredPairingOffer(existing)
   if (!offer) {
     throw new RuntimeEnvironmentStoreError(
       'invalid_argument',
       'Invalid pairing code. Expected an orca://pair?... URL or bare pairing payload.'
     )
   }
-  const store = readEnvironmentStore(userDataPath)
-  const existing = resolveEnvironmentFromStore(store, selector)
   const now = args.now ?? Date.now()
   const previousPairingRevision = existing.pairingRevision ?? existing.createdAt
   // Why: re-pairing a tunnel environment must keep the tunnel; the fresh link
   // only carries the loopback endpoint of the relay on the remote machine.
+  // An explicit vsCodeTunnel overrides the stored one so an expired tunnel
+  // token can be refreshed without a new access link.
   const existingTunnel = getExistingVsCodeTunnelConfig(
     existing.endpoints.find((entry) => entry.id === existing.preferredEndpointId) ??
       existing.endpoints[0] ?? { endpoint: '' }
   )
-  const tunneledOffer = applyVsCodeTunnelToStoreOffer(offer, existingTunnel ?? undefined)
+  const tunnel = args.vsCodeTunnel ?? existingTunnel ?? undefined
+  const tunneledOffer = applyVsCodeTunnelToStoreOffer(offer, tunnel)
   const environment = createEnvironmentFromPairingOffer({
     id: existing.id,
     name: existing.name,
@@ -136,7 +145,7 @@ export function updateEnvironmentFromPairingCode(
     offer: tunneledOffer,
     runtimeId: existing.runtimeId,
     ...(existing.source ? { source: existing.source } : {}),
-    ...(existingTunnel
+    ...(tunnel
       ? { connectionDependency: 'code-tunnel' as const }
       : getPairingConnectionDependency(existing.connectionDependency, tunneledOffer))
   })

@@ -1,6 +1,10 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
-import { verifyRemotePairingRuntimeStatus } from '../../../../shared/remote-pairing-verification'
+import {
+  verifyRemotePairingRuntimeStatus,
+  type RemotePairingFailureKind
+} from '../../../../shared/remote-pairing-verification'
+import type { WebPairingOffer } from '../web-pairing'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { parseWebPairingInput } from '../web-pairing'
@@ -24,6 +28,89 @@ import {
   resolveEnvironment,
   webRuntimeState
 } from './web-runtime-session'
+
+type WebPairingVerification =
+  | { ok: false; kind: RemotePairingFailureKind; message: string }
+  | { ok: true; offer: WebPairingOffer; runtimeStatus: RuntimeStatus }
+
+async function verifyWebPairingOffer(
+  pairingCode: string,
+  allowLoopback?: boolean
+): Promise<WebPairingVerification> {
+  const parsed = parseHostAccessLink(pairingCode)
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      kind: 'access-link-invalid',
+      message: translateHostAccessLinkError(parsed.kind)
+    }
+  }
+  if (parsed.value.endpointKind === 'loopback' && !allowLoopback) {
+    return {
+      ok: false,
+      kind: 'host-unreachable',
+      message: translate(
+        'auto.web.webPreloadApi.loopbackPairingBlocked',
+        'This access link points back to this device.'
+      )
+    }
+  }
+  let client: WebRuntimeClient | null = null
+  try {
+    client = new WebRuntimeClient(parsed.value.pairing)
+    const response = (await client.call('status.get', undefined, {
+      timeoutMs: 15_000
+    })) as RuntimeRpcResponse<RuntimeStatus>
+    if (!response.ok) {
+      return {
+        ok: false,
+        kind: 'connection-interrupted',
+        message: response.error.message
+      }
+    }
+    const statusVerification = verifyRemotePairingRuntimeStatus(response.result)
+    if (!statusVerification.ok) {
+      return statusVerification
+    }
+    return {
+      ok: true,
+      offer: parsed.value.pairing,
+      runtimeStatus: statusVerification.runtimeStatus
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Invalid public key')) {
+      return {
+        ok: false,
+        kind: 'access-link-invalid',
+        message: translate(
+          'auto.web.webPreloadApi.remotePairingInvalidDetails',
+          'This access link contains invalid connection details.'
+        )
+      }
+    }
+    if (
+      isWebRuntimeUnauthorizedError(error) ||
+      (error instanceof Error && error.message.startsWith('Unauthorized.'))
+    ) {
+      return {
+        ok: false,
+        kind: 'access-link-invalid',
+        message: error.message
+      }
+    }
+    return {
+      ok: false,
+      kind: 'host-unreachable',
+      message: translate(
+        'auto.web.webPreloadApi.remotePairingUnreachable',
+        'Cannot reach Orca at {{endpoint}}.',
+        { endpoint: parsed.value.displayEndpoint }
+      )
+    }
+  } finally {
+    client?.close()
+  }
+}
 
 export function createRuntimeEnvironmentsApi(): NonNullable<
   Partial<PreloadApi>['runtimeEnvironments']
@@ -50,85 +137,23 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       return { environment: redactStoredWebRuntimeEnvironment(webRuntimeState.activeEnvironment) }
     },
     verifyAndAddFromPairingCode: async ({ name, pairingCode, allowLoopback }) => {
+      const verification = await verifyWebPairingOffer(pairingCode, allowLoopback)
+      if (!verification.ok) {
+        return verification
+      }
       const parsed = parseHostAccessLink(pairingCode)
-      if (!parsed.ok) {
-        return {
-          ok: false,
-          kind: 'access-link-invalid',
-          message: translateHostAccessLinkError(parsed.kind)
-        }
-      }
-      if (parsed.value.endpointKind === 'loopback' && !allowLoopback) {
-        return {
-          ok: false,
-          kind: 'host-unreachable',
-          message: translate(
-            'auto.web.webPreloadApi.loopbackPairingBlocked',
-            'This access link points back to this device.'
-          )
-        }
-      }
-      let client: WebRuntimeClient | null = null
-      let runtimeStatus: RuntimeStatus
-      try {
-        client = new WebRuntimeClient(parsed.value.pairing)
-        const response = (await client.call('status.get', undefined, {
-          timeoutMs: 15_000
-        })) as RuntimeRpcResponse<RuntimeStatus>
-        if (!response.ok) {
-          return {
-            ok: false,
-            kind: 'connection-interrupted',
-            message: response.error.message
-          }
-        }
-        const statusVerification = verifyRemotePairingRuntimeStatus(response.result)
-        if (!statusVerification.ok) {
-          return statusVerification
-        }
-        runtimeStatus = statusVerification.runtimeStatus
-      } catch (error) {
-        if (error instanceof Error && error.message.startsWith('Invalid public key')) {
-          return {
-            ok: false,
-            kind: 'access-link-invalid',
-            message: translate(
-              'auto.web.webPreloadApi.remotePairingInvalidDetails',
-              'This access link contains invalid connection details.'
-            )
-          }
-        }
-        if (
-          isWebRuntimeUnauthorizedError(error) ||
-          (error instanceof Error && error.message.startsWith('Unauthorized.'))
-        ) {
-          return {
-            ok: false,
-            kind: 'access-link-invalid',
-            message: error.message
-          }
-        }
-        return {
-          ok: false,
-          kind: 'host-unreachable',
-          message: translate(
-            'auto.web.webPreloadApi.remotePairingUnreachable',
-            'Cannot reach Orca at {{endpoint}}.',
-            { endpoint: parsed.value.displayEndpoint }
-          )
-        }
-      } finally {
-        client?.close()
-      }
-      const usesSshTunnel = parsed.value.endpointKind === 'loopback' && allowLoopback === true
+      const usesSshTunnel =
+        parsed.ok && parsed.value.endpointKind === 'loopback' && allowLoopback === true
       const nextEnvironment = {
         ...createStoredWebRuntimeEnvironment({
           name,
-          offer: parsed.value.pairing,
+          offer: verification.offer,
           previousEnvironment: webRuntimeState.activeEnvironment,
           ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {})
         }),
-        ...(runtimeStatus.pairedDeviceId ? { pairedDeviceId: runtimeStatus.pairedDeviceId } : {})
+        ...(verification.runtimeStatus.pairedDeviceId
+          ? { pairedDeviceId: verification.runtimeStatus.pairedDeviceId }
+          : {})
       }
       // Why: a browser storage failure must leave the currently active host usable.
       try {
@@ -149,7 +174,62 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       return {
         ok: true,
         environment: redactStoredWebRuntimeEnvironment(nextEnvironment),
-        runtimeStatus
+        runtimeStatus: verification.runtimeStatus
+      }
+    },
+    updateFromPairingCode: async ({ selector, pairingCode, allowLoopback }) => {
+      if (!pairingCode) {
+        return {
+          ok: false,
+          kind: 'access-link-invalid',
+          message: translate(
+            'auto.web.webPreloadApi.updateRequiresLink',
+            'Provide a new access link to update this server.'
+          )
+        }
+      }
+      const existing = resolveEnvironment(selector)
+      const verification = await verifyWebPairingOffer(pairingCode, allowLoopback)
+      if (!verification.ok) {
+        return verification
+      }
+      const parsed = parseHostAccessLink(pairingCode)
+      const usesSshTunnel =
+        parsed.ok && parsed.value.endpointKind === 'loopback' && allowLoopback === true
+      const nextEnvironment = {
+        ...createStoredWebRuntimeEnvironment({
+          name: existing.name,
+          offer: verification.offer,
+          previousEnvironment: existing,
+          ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {})
+        }),
+        id: existing.id,
+        createdAt: existing.createdAt,
+        lastUsedAt: existing.lastUsedAt,
+        ...(verification.runtimeStatus.pairedDeviceId
+          ? { pairedDeviceId: verification.runtimeStatus.pairedDeviceId }
+          : {})
+      }
+      try {
+        saveStoredWebRuntimeEnvironment(nextEnvironment)
+      } catch {
+        return {
+          ok: false,
+          kind: 'environment-save-failed',
+          message: translate(
+            'auto.web.webPreloadApi.remotePairingSaveFailed',
+            'Orca verified the host but could not save it. Check browser storage and try again.'
+          )
+        }
+      }
+      if (webRuntimeState.activeEnvironment?.id === existing.id) {
+        closeActiveRuntimeClients()
+        webRuntimeState.activeEnvironment = nextEnvironment
+      }
+      return {
+        ok: true,
+        environment: redactStoredWebRuntimeEnvironment(nextEnvironment),
+        runtimeStatus: verification.runtimeStatus
       }
     },
     resolve: async ({ selector }) =>

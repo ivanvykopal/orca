@@ -135,6 +135,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:list',
       'runtimeEnvironments:addFromPairingCode',
       'runtimeEnvironments:verifyAndAddFromPairingCode',
+      'runtimeEnvironments:updateFromPairingCode',
       'runtimeEnvironments:resolve',
       'runtimeEnvironments:remove',
       'runtimeEnvironments:disconnect',
@@ -159,6 +160,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:list',
       'runtimeEnvironments:addFromPairingCode',
       'runtimeEnvironments:verifyAndAddFromPairingCode',
+      'runtimeEnvironments:updateFromPairingCode',
       'runtimeEnvironments:resolve',
       'runtimeEnvironments:remove',
       'runtimeEnvironments:disconnect',
@@ -410,6 +412,106 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       endpoint: 'wss://my-box-39271.devtunnels.ms/',
       tunnelAccessToken: 'tunnel-token'
     })
+  })
+
+  it('replaces the stored tunnel when an update supplies a new one', async () => {
+    environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+      name: 'desk',
+      pairingCode: pairingCode(),
+      vsCodeTunnel: {
+        url: 'https://old-box-39271.devtunnels.ms',
+        accessToken: 'old-token'
+      }
+    })
+
+    const updated = environmentStore.updateEnvironmentFromPairingCode(userDataPath, 'desk', {
+      vsCodeTunnel: {
+        url: 'https://new-box-83515.devtunnels.ms',
+        accessToken: 'new-token'
+      }
+    })
+
+    expect(updated.connectionDependency).toBe('code-tunnel')
+    expect(updated.endpoints[0]).toMatchObject({
+      endpoint: 'wss://new-box-83515.devtunnels.ms/',
+      tunnelAccessToken: 'new-token'
+    })
+  })
+
+  it('updates a saved server in place through a fresh tunnel without a new access link', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const added = environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+      name: 'desk',
+      pairingCode: pairingCode(),
+      vsCodeTunnel: {
+        url: 'https://old-box-39271.devtunnels.ms',
+        accessToken: 'old-token'
+      }
+    })
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: runtimeStatus(),
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const update = handler<
+      {
+        selector: string
+        pairingCode?: string
+        vsCodeTunnel?: { url: string; accessToken: string }
+      },
+      { ok: boolean; environment?: { id: string; name: string } }
+    >('runtimeEnvironments:updateFromPairingCode')
+
+    const result = await update(null, {
+      selector: added.id,
+      vsCodeTunnel: {
+        url: 'https://new-box-83515.devtunnels.ms',
+        accessToken: 'fresh-token'
+      }
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      environment: { id: added.id, name: 'desk' }
+    })
+    expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: 'wss://new-box-83515.devtunnels.ms/',
+        tunnelAccessToken: 'fresh-token'
+      }),
+      'status.get',
+      undefined,
+      15_000,
+      undefined,
+      undefined,
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+    )
+    const stored = environmentStore.listEnvironments(userDataPath)
+    expect(stored).toHaveLength(1)
+    expect(stored[0]!.endpoints[0]).toMatchObject({
+      endpoint: 'wss://new-box-83515.devtunnels.ms/',
+      tunnelAccessToken: 'fresh-token'
+    })
+  })
+
+  it('rejects an update that supplies neither an access link nor tunnel details', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const added = environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+      name: 'desk',
+      pairingCode: pairingCode()
+    })
+    const update = handler<{ selector: string }, { ok: boolean; kind?: string; message?: string }>(
+      'runtimeEnvironments:updateFromPairingCode'
+    )
+
+    await expect(update(null, { selector: added.id })).resolves.toMatchObject({
+      ok: false,
+      kind: 'access-link-invalid'
+    })
+    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
+    // Why: a rejected update must leave the saved credentials untouched.
+    expect(environmentStore.listEnvironments(userDataPath)).toHaveLength(1)
   })
 
   it.each([

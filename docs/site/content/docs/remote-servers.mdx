@@ -100,6 +100,10 @@ Adding a server saves it without forcing every new project onto it. Open **Advan
 
 Once the server shows **Connected**, select it or one of its projects and use Orca normally. Terminals, agent processes, files, worktrees, and session state live on the server computer.
 
+### Update an existing server
+
+Credentials can change while the machine stays the same — a VS Code tunnel access token rotates, or you generate a fresh access link. Click **Re-pair** on the server row to update it in place: paste a new access link, or enable **Connect through a VS Code tunnel** and enter the current tunnel URL and access token. The saved server keeps its name, selection as Active Server, and paired identity; Orca verifies the new credentials and reconnects immediately.
+
 When several paired clients share that server, the sidebar filter can offer **Hide other-client workspaces** so this device only lists workspaces it created. See [Worktrees → Sidebar layout](/docs/model/worktrees#sidebar-layout).
 
 That means:

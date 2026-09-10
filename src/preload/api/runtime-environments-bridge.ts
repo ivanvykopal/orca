@@ -27,6 +27,13 @@ export const runtimeEnvironmentsApi = {
     vsCodeTunnel?: VsCodeTunnelConfig
   }): Promise<VerifyAndAddRuntimeEnvironmentResult> =>
     ipcRenderer.invoke('runtimeEnvironments:verifyAndAddFromPairingCode', args),
+  updateFromPairingCode: (args: {
+    selector: string
+    pairingCode?: string
+    allowLoopback?: boolean
+    vsCodeTunnel?: VsCodeTunnelConfig
+  }): Promise<VerifyAndAddRuntimeEnvironmentResult> =>
+    ipcRenderer.invoke('runtimeEnvironments:updateFromPairingCode', args),
   resolve: (args: { selector: string }): Promise<PublicKnownRuntimeEnvironment> =>
     ipcRenderer.invoke('runtimeEnvironments:resolve', args),
   remove: (args: { selector: string }): Promise<{ removed: PublicKnownRuntimeEnvironment }> =>

@@ -10,6 +10,27 @@ minimumReleaseAge: 4320
 minimumReleaseAgeExclude:
   - pdfjs-dist@6.3.289
   - zod@4.5.4
+  - '@anthropic-ai/sdk@0.124.0'
+  - '@iconify/utils@3.1.7'
+  - '@swc/core-darwin-arm64@1.16.2'
+  - '@swc/core-darwin-x64@1.16.2'
+  - '@swc/core-linux-arm-gnueabihf@1.16.2'
+  - '@swc/core-linux-arm64-gnu@1.16.2'
+  - '@swc/core-linux-arm64-musl@1.16.2'
+  - '@swc/core-linux-ppc64-gnu@1.16.2'
+  - '@swc/core-linux-s390x-gnu@1.16.2'
+  - '@swc/core-linux-x64-gnu@1.16.2'
+  - '@swc/core-linux-x64-musl@1.16.2'
+  - '@swc/core-win32-arm64-msvc@1.16.2'
+  - '@swc/core-win32-ia32-msvc@1.16.2'
+  - '@swc/core-win32-x64-msvc@1.16.2'
+  - '@swc/core@1.16.2'
+  - browserslist@4.28.9
+  - cn@0.2.6
+  - dompurify@3.4.15
+  - hono@4.13.7
+  - jose@6.2.12
+  - undici@6.28.1 || 7.29.1
 shamefullyHoist: true
 
 # Orca always launches the user's own resolved Claude CLI via
