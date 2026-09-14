@@ -20,6 +20,9 @@ import { translateHostAccessLinkError } from '@/lib/remote-pairing-copy'
 import { callEnvironmentEnvelope } from './web-runtime-calls'
 import {
   closeActiveRuntimeClients,
+  subscribeWebRuntimeStatus,
+  readWebRuntimeStatusSnapshots,
+  observeWebRuntimeStatus,
   disconnectActiveRuntimeEnvironment,
   getClientForEnvironment,
   manuallyDisconnectedEnvironmentIds,
@@ -116,6 +119,8 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
   Partial<PreloadApi>['runtimeEnvironments']
 > {
   return {
+    onStatusChanged: subscribeWebRuntimeStatus,
+    getStatusSnapshots: async () => readWebRuntimeStatusSnapshots(),
     list: async () => {
       const environment = requireActiveEnvironmentOrNull()
       return environment ? [redactStoredWebRuntimeEnvironment(environment)] : []
@@ -171,6 +176,12 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       manuallyDisconnectedEnvironmentIds.clear()
       closeActiveRuntimeClients()
       webRuntimeState.activeEnvironment = nextEnvironment
+      getClientForEnvironment(nextEnvironment).statusOwner?.acceptVerified({
+        id: 'status.get',
+        ok: true,
+        result: runtimeStatus,
+        _meta: { runtimeId: runtimeStatus.runtimeId }
+      })
       return {
         ok: true,
         environment: redactStoredWebRuntimeEnvironment(nextEnvironment),
@@ -253,6 +264,7 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
     connect: ({ selector, timeoutMs }) => {
       const environment = resolveEnvironment(selector)
       manuallyDisconnectedEnvironmentIds.delete(environment.id)
+      closeActiveRuntimeClients()
       return callEnvironmentEnvelope<RuntimeStatus>(
         environment.id,
         'status.get',
@@ -260,8 +272,10 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
         timeoutMs
       )
     },
-    getStatus: ({ selector, timeoutMs }) =>
-      callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs),
+    getStatus: ({ selector, timeoutMs, observeOnly }) =>
+      observeOnly
+        ? observeWebRuntimeStatus(selector, timeoutMs)
+        : callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs),
     retryControlConnection: () => Promise.resolve(),
     prepareBrowserClientHostPlacement: async () => ({ kind: 'server' }),
     call: ({ selector, method, params, timeoutMs }) =>

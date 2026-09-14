@@ -10,6 +10,7 @@ export const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
   'runtimeEnvironments:retryControlConnection',
   'runtimeEnvironments:prepareBrowserClientHostPlacement',
   'runtimeEnvironments:getStatus',
+  'runtimeEnvironments:getStatusSnapshots',
   'runtimeEnvironments:call',
   'runtimeEnvironments:subscribe',
   'runtimeEnvironments:unsubscribe'
