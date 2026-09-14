@@ -175,8 +175,8 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       getClientForEnvironment(nextEnvironment).statusOwner?.acceptVerified({
         id: 'status.get',
         ok: true,
-        result: runtimeStatus,
-        _meta: { runtimeId: runtimeStatus.runtimeId }
+        result: verification.runtimeStatus,
+        _meta: { runtimeId: verification.runtimeStatus.runtimeId }
       })
       return {
         ok: true,
