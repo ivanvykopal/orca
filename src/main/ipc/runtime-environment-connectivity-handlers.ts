@@ -31,7 +31,8 @@ import {
 import {
   clearRuntimeEnvironmentManualDisconnect,
   isRuntimeEnvironmentManuallyDisconnected,
-  markRuntimeEnvironmentManuallyDisconnected
+  markRuntimeEnvironmentManuallyDisconnected,
+  RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
 } from './runtime-environment-manual-disconnect'
 import {
   callRuntimeEnvironment,
@@ -46,7 +47,7 @@ function manuallyDisconnectedResponse(
     ok: false,
     error: {
       code: 'runtime_manually_disconnected',
-      message: 'Runtime environment is manually disconnected.'
+      message: RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
     },
     _meta: { runtimeId: environment.runtimeId }
   }
