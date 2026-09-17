@@ -17,6 +17,10 @@ import {
 } from './remote-runtime-client-handshake'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import {
+  remoteRuntimeConnectFailureMessage,
+  remoteRuntimeConnectOptions
+} from './remote-runtime-connect-bound'
+import {
   REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES,
   serializeRemoteRuntimePayload,
   serializeRemoteRuntimeRpcRequest
@@ -183,12 +187,15 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
     }
 
     try {
-      ws = new WebSocket(pairing.endpoint, {
-        maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES,
-        ...(pairing.tunnelAccessToken
-          ? { headers: { 'x-tunnel-authorization': `tunnel ${pairing.tunnelAccessToken}` } }
-          : {})
-      })
+      ws = new WebSocket(
+        pairing.endpoint,
+        remoteRuntimeConnectOptions({
+          maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES,
+          ...(pairing.tunnelAccessToken
+            ? { headers: { 'x-tunnel-authorization': `tunnel ${pairing.tunnelAccessToken}` } }
+            : {})
+        })
+      )
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       finishError(
@@ -206,11 +213,11 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       )
     }
 
-    function onError(): void {
+    function onError(error: Error): void {
       finishError(
         new RemoteRuntimeClientError(
           'remote_runtime_unavailable',
-          'Could not connect to the remote Orca runtime.',
+          remoteRuntimeConnectFailureMessage(error, pairing.endpoint),
           { pairingStage: router.pairingStage }
         )
       )
