@@ -18,6 +18,17 @@ minimumReleaseAgeExclude:
   - zod@4.5.4
   - electron@43.7.0
   - '@shadcn/lint@0.1.0'
+  - '@shadcn/lint@0.1.1'
+  - '@posthog/core@1.53.3'
+  - '@posthog/types@1.412.0'
+  - '@testing-library/dom@10.4.2'
+  - '@tybys/wasm-util@0.10.4'
+  - baseline-browser-mapping@2.11.23
+  - enhanced-resolve@5.25.1
+  - micromark-extension-gfm-table@2.1.2
+  - open@11.0.3
+  - tldts-core@7.4.13
+  - yaml@2.9.1
 shamefullyHoist: true
 
 # Orca always launches the user's own resolved Claude CLI via
