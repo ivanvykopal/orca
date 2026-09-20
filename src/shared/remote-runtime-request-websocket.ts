@@ -129,7 +129,7 @@ function createSocket(
   try {
     return {
       ok: true,
-2:      ws: new WebSocket(
+      ws: new WebSocket(
         pairing.endpoint,
         remoteRuntimeConnectOptions(
           pairing.tunnelAccessToken
