@@ -182,6 +182,31 @@ describe('web runtime session tab actions', () => {
     expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalled()
   })
 
+  it('carries the picked split pane and the visible tab guard to the owner and focus intent', async () => {
+    mocks.resolveHostSessionTabIdForWebSessionTab.mockReturnValue('host-terminal')
+    const runtimeCall = vi.fn().mockResolvedValue({ id: 'activate', ok: true, result: {} })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await activateWebRuntimeSessionTab({
+      worktreeId: WORKTREE_ID,
+      tabId: 'local-terminal',
+      leafId: 'leaf-b',
+      expectedCurrentLocalTabId: 'unified-local-terminal'
+    })
+
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'session.tabs.activate',
+        params: expect.objectContaining({ tabId: 'host-terminal', leafId: 'leaf-b' })
+      })
+    )
+    expect(peekWebSessionFocusIntent({ environmentId: ENVIRONMENT_ID }, WORKTREE_ID)).toEqual({
+      hostTabId: 'host-terminal',
+      leafId: 'leaf-b',
+      expectedCurrentLocalTabId: 'unified-local-terminal'
+    })
+  })
+
   it('supersedes browser focus intent when a terminal is activated next', async () => {
     mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
       (_state, args: { tabId: string }) =>
@@ -483,6 +508,52 @@ describe('web runtime session tab actions', () => {
     expect(mocks.acceptReplayedWebSessionTabsSnapshot.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.applyWebSessionTabsSnapshot.mock.invocationCallOrder[0]!
     )
+  })
+
+  it('reports a republished stale-terminal refusal to the caller exactly like a real close', async () => {
+    const callFor = (result: unknown) => {
+      const runtimeCall = vi
+        .fn()
+        .mockResolvedValueOnce({ id: 'close', ok: true, result })
+        .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+      vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+      return closeWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        reason: 'pty-exit',
+        publicationEpoch: 'epoch-1',
+        terminalHandle: 'term-1'
+      })
+    }
+
+    const committed = await callFor({ closed: true })
+    const refused = await callFor({
+      closed: true,
+      refused: true,
+      refusalReason: 'stale-terminal',
+      snapshotRepublished: true
+    })
+
+    // Why: this is the whole user-visible bug. The host kept the tab and said so,
+    // but the refusal is dropped here — the caller gets the same 'applied' it gets
+    // for a real close, so the tab vanishes and silently reappears with no error,
+    // no toast and no retry. Any fix must make these two outcomes distinguishable.
+    expect(refused).toBe('applied')
+    expect(refused).toBe(committed)
+
+    // The un-hide that makes the tab come back.
+    expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledWith(
+      ENVIRONMENT_ID,
+      WORKTREE_ID
+    )
+    expect(
+      isWebSessionCloseIntentPending(
+        { environmentId: ENVIRONMENT_ID },
+        WORKTREE_ID,
+        'host-browser-unified',
+        Date.now()
+      )
+    ).toBe(false)
   })
 
   it('keeps the close intent when a refused lifecycle close was not republished', async () => {

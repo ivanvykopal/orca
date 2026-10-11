@@ -8,6 +8,7 @@ import type { RuntimeTerminalCreate, RuntimeTerminalPresentation } from './runti
 import { isTerminalLeafId } from './stable-pane-id'
 import { isValidTerminalTabId } from './terminal-tab-id'
 import type { TuiAgent } from './tui-agent'
+import type { SpawnIntent } from './host-spawn-admission'
 
 export { AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY as AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from './protocol-version'
 
@@ -111,11 +112,13 @@ export type RuntimeEnsureAgentSessionRequest =
       agent: ResumableTuiAgent
       providerSession: AgentProviderSessionMetadata
       ompResumeFilePath?: string
+      terminalKittyKeyboardProtocol?: boolean
       /** Explicit client override. Omission keeps launch defaults host-owned. */
       agentArgs?: string | null
       launchPreferences?: AgentLaunchPreferences
       presentation?: RuntimeTerminalPresentation
       placement?: { tabId?: string; leafId?: string }
+      spawnIntent?: SpawnIntent
     }
 
 export type RuntimeEnsureAgentSessionResult = {
@@ -125,6 +128,7 @@ export type RuntimeEnsureAgentSessionResult = {
 
 export type RuntimeCreateAgentSessionRequest = {
   clientOperationId: string
+  terminalKittyKeyboardProtocol?: boolean
   worktree: string
   agent: TuiAgent
   prompt?: string

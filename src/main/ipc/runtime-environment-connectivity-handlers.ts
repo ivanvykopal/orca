@@ -12,16 +12,11 @@ import {
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 import { RuntimeRpcCallQueueOverloadError } from '../../shared/runtime-rpc-call-queue'
 import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
-import type { VsCodeTunnelConfig } from '../../shared/vscode-tunnel-pairing'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { Store } from '../persistence'
-import { clearBrowserRoutePartitionStorageForEnvironment } from '../browser/browser-route-partition-storage-runtime'
-import { retireBrowserRoutePartitionStorageForEnvironment } from '../browser/browser-route-partition-storage-retirement'
-import {
-  verifyAndAddRuntimeEnvironmentFromPairingCode,
-  verifyAndUpdateRuntimeEnvironmentFromPairingCode
-} from './runtime-environment-pairing-verification'
-import { clearRuntimeEnvironmentCapabilityEvidence } from './runtime-environment-capability-evidence'
+import { retireRemovedRuntimeEnvironment } from './runtime-environment-removal-cleanup'
+import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environment-preference'
+import { verifyAndAddRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
 import {
   closeRemoteRuntimeRequestConnection,
   getRuntimeEnvironmentStatusOwner,
@@ -38,6 +33,7 @@ import {
   callRuntimeEnvironment,
   getRuntimeEnvironmentStatus
 } from './runtime-environment-transport-routing'
+import { publicRuntimeEnvironmentWithHostKey } from './runtime-environment-host-key'
 
 function manuallyDisconnectedResponse(
   environment: ReturnType<typeof resolveEnvironment>
@@ -69,9 +65,11 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   ipcMain.handle('runtimeEnvironments:getStatusSnapshots', () =>
     getRuntimeEnvironmentStatusSnapshots()
   )
-  ipcMain.handle('runtimeEnvironments:list', () =>
-    listEnvironments(getUserDataPath()).map(redactRuntimeEnvironment)
-  )
+  ipcMain.handle('runtimeEnvironments:list', () => {
+    const environments = listEnvironments(getUserDataPath())
+    readSettingsWithRuntimeEnvironmentPreference(store, getUserDataPath())
+    return environments.map(publicRuntimeEnvironmentWithHostKey)
+  })
   ipcMain.handle(
     'runtimeEnvironments:addFromPairingCode',
     (
@@ -85,15 +83,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   )
   ipcMain.handle(
     'runtimeEnvironments:verifyAndAddFromPairingCode',
-    async (
-      _event,
-      args: {
-        name: string
-        pairingCode: string
-        allowLoopback?: boolean
-        vsCodeTunnel?: VsCodeTunnelConfig
-      }
-    ) => {
+    async (_event, args: { name: string; pairingCode: string; allowLoopback?: boolean }) => {
       const result = await verifyAndAddRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
       if (result.ok) {
         clearRuntimeEnvironmentManualDisconnect(result.environment.id)
@@ -107,28 +97,6 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       return result
     }
   )
-  ipcMain.handle(
-    'runtimeEnvironments:updateFromPairingCode',
-    async (
-      _event,
-      args: {
-        selector: string
-        pairingCode?: string
-        allowLoopback?: boolean
-        vsCodeTunnel?: VsCodeTunnelConfig
-      }
-    ) => {
-      const result = await verifyAndUpdateRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
-      if (result.ok) {
-        clearRuntimeEnvironmentManualDisconnect(result.environment.id)
-        // Why: the stored credentials changed, so live sockets must not keep
-        // serving the old tunnel token until they happen to drop.
-        void invalidateTransport(result.environment.id)
-        closeLegacySelectorTransport(args.selector, result.environment.id)
-      }
-      return result
-    }
-  )
   ipcMain.handle('runtimeEnvironments:resolve', (_event, args: { selector: string }) =>
     redactRuntimeEnvironment(resolveEnvironment(getUserDataPath(), args.selector))
   )
@@ -137,25 +105,13 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
     (_event, args: { selector: string }): { removed: PublicKnownRuntimeEnvironment } => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       if (store.getSettings().activeRuntimeEnvironmentId === environment.id) {
-        throw new Error('Choose another Active Server in Advanced before removing this server.')
+        throw new Error(
+          'This server is the default host for new projects. Choose another one in Advanced before removing it.'
+        )
       }
       const removed = removeEnvironment(getUserDataPath(), args.selector)
-      clearRuntimeEnvironmentCapabilityEvidence(removed.id)
-      clearRuntimeEnvironmentManualDisconnect(removed.id)
-      const retiring = Promise.resolve(invalidateTransport(removed.id))
+      void retireRemovedRuntimeEnvironment(removed.id, invalidateTransport, store)
       closeLegacySelectorTransport(args.selector, removed.id)
-      // Why: removal is an explicit lifecycle decision, so its client-hosted browser storage goes
-      // too -- but only once the client host releases its partitions, or every one refuses as live.
-      void retireBrowserRoutePartitionStorageForEnvironment({
-        environmentId: removed.id,
-        whenClientHostClosed: retiring,
-        clearStorage: clearBrowserRoutePartitionStorageForEnvironment,
-        onError: (error) => {
-          console.warn('[runtime-environments] browser partition storage clear failed:', error)
-        }
-      }).catch((error) => {
-        console.warn('[runtime-environments] browser partition storage clear failed:', error)
-      })
       return { removed: redactRuntimeEnvironment(removed) }
     }
   )

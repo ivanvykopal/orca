@@ -32,6 +32,7 @@ export type WorkspaceHydrationPatch = Pick<
   | 'worktreeNavHistoryIndex'
   | 'ptyIdsByTabId'
   | 'terminalLayoutsByTabId'
+  | 'localOnlyScrollbackByTabId'
 > &
   // Why partial: only a cold read carries the contested-host shadow; a scoped re-hydration must
   // leave the store's copy alone rather than replace it with an empty one.
@@ -183,12 +184,16 @@ export function targetScopedWorkspaceHydrationPatch(
       hydrated.lastVisitedAtByWorktreeId,
       workspaceKeys
     ),
-    defaultTerminalTabsAppliedByWorktreeId: replaceHydratedRecordKeys(
-      state.defaultTerminalTabsAppliedByWorktreeId,
-      hydrated.defaultTerminalTabsAppliedByWorktreeId,
-      workspaceKeys
-    ),
-    // Why passed through whole: hydration already unioned it with live store state, and the map is
+    // Why local marks win: the applied mark is write-once.
+    defaultTerminalTabsAppliedByWorktreeId: {
+      ...replaceHydratedRecordKeys(
+        state.defaultTerminalTabsAppliedByWorktreeId,
+        hydrated.defaultTerminalTabsAppliedByWorktreeId,
+        workspaceKeys
+      ),
+      ...state.defaultTerminalTabsAppliedByWorktreeId
+    },
+    // Why passed through whole: hydration already fell back to live store state, and the map is
     // keyed by tab id rather than by workspace key so replaceHydratedRecordKeys has nothing to match.
     closedTerminalTabTombstonesByTabId: hydrated.closedTerminalTabTombstonesByTabId,
     automaticAgentResumeClaimsByTabId: replaceHydratedRecordKeys(
@@ -234,6 +239,11 @@ export function targetScopedWorkspaceHydrationPatch(
     terminalLayoutsByTabId: replaceHydratedRecordKeys(
       state.terminalLayoutsByTabId,
       hydrated.terminalLayoutsByTabId,
+      targetTabIds
+    ),
+    localOnlyScrollbackByTabId: replaceHydratedRecordKeys(
+      state.localOnlyScrollbackByTabId,
+      hydrated.localOnlyScrollbackByTabId,
       targetTabIds
     )
   }

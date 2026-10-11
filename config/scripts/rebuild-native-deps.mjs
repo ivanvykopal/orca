@@ -19,6 +19,10 @@
  */
 
 import { rebuild } from '@electron/rebuild'
+import {
+  hasAdoptedSharedElectronDist,
+  resolveSharedElectronDistEntry
+} from './shared-electron-dist-cache.mjs'
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   ensureWindowsProcessTreeCommandLinePatch,
@@ -26,6 +30,7 @@ import {
   stageWindowsProcessTreeNodeAddonApiHeaders,
   windowsProcessTreeAddonPath
 } from './windows-process-tree-gyp-rebuild.mjs'
+import { disableMsbuildFileTrackingOnWindows } from './msbuild-file-tracking.mjs'
 import {
   copyFileSync,
   existsSync,
@@ -151,6 +156,7 @@ try {
   // delete fails EPERM when the addon is loaded -- exactly the running-Orca case
   // the catch below is written for. Outside, it aborted `pnpm install` with a
   // raw stack instead of the "close running Orca/Electron processes" message.
+  assertNodePtyConptySourceDeniesMsysBreakaway()
   if (
     rebuildPlatform === 'win32' &&
     modulesToRebuild.includes('@vscode/windows-process-tree') &&
@@ -161,6 +167,7 @@ try {
       console.warn('[rebuild] Repaired the un-applied windows-process-tree command-line patch.')
     }
   }
+  disableMsbuildFileTrackingOnWindows()
   await rebuild({
     buildPath: projectDir,
     electronVersion,
@@ -257,6 +264,22 @@ function assertNodePtyConptyDeniesMsysBreakaway() {
   })
 }
 
+/**
+ * Refuse to compile node-pty source that cannot yield the denial. Why before the
+ * rebuild: the gate above would spend the compile and then advise "rebuild from
+ * source" -- the step that just ran. Only the source is read; the addon is not
+ * touched, so a locked binary cannot turn this into a spurious EPERM.
+ */
+function assertNodePtyConptySourceDeniesMsysBreakaway() {
+  if (rebuildPlatform !== 'win32' || !modulesToRebuild.includes('node-pty')) {
+    return
+  }
+  const { assertNodePtySourceDeniesMsysBreakaway } = requireLocal('./node-pty-job-ownership.cjs')
+  assertNodePtySourceDeniesMsysBreakaway({
+    nodePtyDir: resolve(projectDir, 'node_modules', 'node-pty')
+  })
+}
+
 function restoreNodePtyWindowsConptyRuntime() {
   if (rebuildPlatform !== 'win32' || !onlyModules.includes('node-pty')) {
     return
@@ -291,6 +314,16 @@ function restoreNodePtyWindowsConptyRuntime() {
 function ensureElectronPackageInstalled() {
   repairElectronPathFile()
   if (electronPackageIsUsable()) {
+    const shared = resolveSharedElectronDistEntry({
+      repoRoot: projectDir,
+      electronPackageDir,
+      version: electronVersion,
+      targetPlatform: electronInstallPlatform,
+      targetArch: electronInstallArch
+    })
+    if (shared && !hasAdoptedSharedElectronDist(shared)) {
+      runElectronPackageBinaryInstall()
+    }
     return
   }
 

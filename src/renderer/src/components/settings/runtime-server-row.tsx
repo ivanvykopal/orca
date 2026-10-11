@@ -1,8 +1,10 @@
-import { AlertTriangle, KeyRound, Loader2, Server, ServerOff, Trash2 } from 'lucide-react'
+import { AlertTriangle, Loader2, Server, ServerOff, Trash2 } from 'lucide-react'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { resolveHostDisplay } from '../../../../shared/host-display-resolution'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
 import {
   isConnectedRuntimeHostState,
   runtimeHostConnectionStateForEntry
@@ -36,7 +38,6 @@ type RuntimeServerRowProps = {
   removing: boolean
   isBusy: boolean
   onOpenUpdate: () => void
-  onRepair: (environment: PublicKnownRuntimeEnvironment) => void
   onDisconnect: (environment: PublicKnownRuntimeEnvironment) => void
   onConnect: (environment: PublicKnownRuntimeEnvironment) => void
   onRemove: (environment: PublicKnownRuntimeEnvironment) => void
@@ -54,7 +55,6 @@ export function RuntimeServerRow({
   removing,
   isBusy,
   onOpenUpdate,
-  onRepair,
   onDisconnect,
   onConnect,
   onRemove
@@ -95,13 +95,21 @@ export function RuntimeServerRow({
   // A connected host exposes Disconnect; otherwise Connect.
   const isReachable = isRuntimeServerTransportConnected(connectionState)
   const actionBusy = connecting || switching || disconnecting || removing
+  // Why: the snapshot keeps the last answered status across a lost probe; `status` is only the latest answer.
+  const descriptorStatus = lastVerifiedRuntimeStatus(runtimeStatusEntry)
+  const hostDisplay = resolveHostDisplay({
+    name: environment.name,
+    machineName: descriptorStatus?.machineName,
+    platform: descriptorStatus?.hostPlatform
+  })
+  const hostDescriptorText = hostDisplay.descriptorLine
 
   return (
     <div data-settings-section={environment.id} className="flex items-center gap-3 px-4 py-3">
       <Server className="size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="truncate text-sm font-medium">{environment.name}</div>
+          <div className="truncate text-sm font-medium">{hostDisplay.title}</div>
           <span
             className={cn(
               'size-2 shrink-0 rounded-full',
@@ -117,23 +125,21 @@ export function RuntimeServerRow({
             <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
           ) : null}
         </div>
+        {hostDescriptorText ? (
+          <p className="truncate text-xs text-muted-foreground">{hostDescriptorText}</p>
+        ) : null}
         <p className="truncate text-xs text-muted-foreground">
           {environment.connectionDependency === 'ssh-tunnel'
             ? translate(
                 'auto.components.settings.RuntimeEnvironmentsPane.sshTunnelRequired',
                 'SSH tunnel required'
               )
-            : environment.connectionDependency === 'code-tunnel'
+            : isActive
               ? translate(
-                  'auto.components.settings.RuntimeEnvironmentsPane.vscodeTunnelRequired',
-                  'VS Code tunnel required'
+                  'auto.components.settings.RuntimeEnvironmentsPane.activeServerRowHelp',
+                  'Default host for new projects. Existing projects stay on their own host.'
                 )
-              : isActive
-                ? translate(
-                    'auto.components.settings.RuntimeEnvironmentsPane.activeServerRowHelp',
-                    'Active server for server-routed projects, terminals, and provider checks.'
-                  )
-                : getHostDetailsSummary(effectiveDetails)}
+              : getHostDetailsSummary(effectiveDetails)}
         </p>
         {detailsDescription ? (
           <p
@@ -185,17 +191,6 @@ export function RuntimeServerRow({
             {translate('auto.components.settings.RuntimeEnvironmentsPane.updateServer', 'Update')}
           </Button>
         ) : null}
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className="gap-1.5"
-          onClick={() => onRepair(environment)}
-          disabled={isBusy}
-        >
-          <KeyRound className="size-3" />
-          {translate('auto.components.settings.RuntimeEnvironmentsPane.repair', 'Re-pair')}
-        </Button>
         {isReachable ? (
           <Button
             type="button"

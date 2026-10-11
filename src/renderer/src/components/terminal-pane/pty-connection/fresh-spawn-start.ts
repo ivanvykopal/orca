@@ -1,4 +1,7 @@
+import type { SpawnDeferralReason } from '../../../../../shared/host-spawn-admission'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
+import { PROCESS_BOUNDARY_GROUND } from '../../../../../shared/terminal-mode-reset-profiles'
 import { hasPtySerializer } from '../pty-buffer-serializer'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 
@@ -6,7 +9,6 @@ import { settleSpawnThatLeftPaneUnbound } from './unbound-pane-spawn-recovery'
 import { STARTUP_CWD_FALLBACK_NOTICE } from './startup-cwd-fallback-notice'
 import { pendingSpawnByPaneKey, pendingSpawnGenerationByPaneKey } from './pty-connect-limits'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { toProcessExitStartup } from './process-exit-startup'
 import type {
   PendingStartupCommand,
@@ -43,6 +45,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       releaseDeferredCwdFence()
       return Promise.resolve(null)
     }
+    if (session.buffersInputOnlyForReattach) {
+      // Why: keys typed for the shell this pane meant to reattach must not run in its replacement.
+      session.transport.abandonPreconnectInput?.()
+    }
     session.authoritativeReattachGeneration += 1
     // Every fresh connect creates or rebinds a PTY. Do not let a legacy
     // response that omits `incarnationId` inherit the predecessor's fence.
@@ -52,11 +58,9 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     // Why: a canceled old replay clear can preserve xterm's native
     // isUserScrolling flag. A replacement shell must start in follow mode.
     session.resetFreshSpawnFollowOutput()
-    // Why: a fresh spawn is a new process with kitty keyboard flags at
-    // zero. The exit-handler reset alone is not enough: a late exit from a
-    // replaced PTY takes the stale-transport early return and skips it, so
-    // a restart-in-place would leak the old TUI's flags into a fresh shell.
-    session.kittyKeyboardModes.reset()
+    // Why: a fresh spawn is a new process, so a restart-in-place must not
+    // inherit the old TUI's screen, mouse or kitty modes in xterm or the mirror.
+    session.writeInputModeGround(PROCESS_BOUNDARY_GROUND)
     session.prepareFreshShellViewportForSpawn(options)
     const coldRestoreOverride =
       startupOverride && 'launchConfig' in startupOverride
@@ -83,6 +87,8 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     }
 
     session.transportConnectInFlightSince = Date.now()
+    session.pendingSpawnDeferral = null
+    const visibleAtSpawn = session.deps.isVisibleRef.current === true
     const effectiveStartup = startupOverride === undefined ? session.paneStartup : startupOverride
     const outputCallbacks = session.captureTransportOutputCallbacks(
       session.reportError,
@@ -111,6 +117,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
       ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {}),
       ...(session.shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
+      resumeSpawnIntent: visibleAtSpawn ? 'user-resume' : 'automatic-restore',
+      ...(session.pendingReplacedPtyId
+        ? { claimReplacedPtyId: session.claimPendingReplacedPtyId }
+        : {}),
       shouldContinue: () =>
         !session.disposed &&
         (findTerminalTabForPane(useAppStore.getState(), session.deps.worktreeId, session.deps.tabId)
@@ -136,6 +146,18 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
             : typeof spawnedPtyId === 'string'
               ? spawnedPtyId
               : session.transport.getPtyId()
+        const deferral: SpawnDeferralReason | null = resolvedPtyId
+          ? null
+          : session.pendingSpawnDeferral
+        session.pendingSpawnDeferral = null
+        if (deferral) {
+          // Why before the launch-config cleanup below: a deferred launch is postponed, not dead.
+          releaseDeferredCwdFence()
+          clearPreSignaledSerializer()
+          session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
+          session.enterSpawnDeferredSleep(deferral, startupOverride, options, visibleAtSpawn)
+          return null
+        }
         if (resolvedPtyId && !session.claimCapturedDirectSshRetryPty(resolvedPtyId)) {
           releaseDeferredCwdFence()
           session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
@@ -294,6 +316,11 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           session.transport.getPtyId() ||
           pendingSpawnByPaneKey.has(session.pendingSpawnKey)
         ) {
+          return
+        }
+        if (session.deferredSpawn) {
+          // Why no remount: the host would defer the remount's restore again, in a loop.
+          session.settlePaneAttachAttempt?.(session.directSshRetryAttempt, 'failed')
           return
         }
         settleSpawnThatLeftPaneUnbound(session)
