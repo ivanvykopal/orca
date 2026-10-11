@@ -17,7 +17,10 @@ import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { Store } from '../persistence'
 import { retireRemovedRuntimeEnvironment } from './runtime-environment-removal-cleanup'
 import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environment-preference'
-import { verifyAndAddRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
+import {
+  verifyAndAddRuntimeEnvironmentFromPairingCode,
+  verifyAndUpdateRuntimeEnvironmentFromPairingCode
+} from './runtime-environment-pairing-verification'
 import {
   closeRemoteRuntimeRequestConnection,
   getRuntimeEnvironmentStatusOwner,
@@ -102,6 +105,28 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
           result: result.runtimeStatus,
           _meta: { runtimeId: result.runtimeStatus.runtimeId }
         })
+      }
+      return result
+    }
+  )
+  ipcMain.handle(
+    'runtimeEnvironments:updateFromPairingCode',
+    async (
+      _event,
+      args: {
+        selector: string
+        pairingCode?: string
+        allowLoopback?: boolean
+        vsCodeTunnel?: VsCodeTunnelConfig
+      }
+    ) => {
+      const result = await verifyAndUpdateRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
+      if (result.ok) {
+        clearRuntimeEnvironmentManualDisconnect(result.environment.id)
+        // Why: the stored credentials changed, so live sockets must not keep
+        // serving the old tunnel token until they happen to drop.
+        void invalidateTransport(result.environment.id)
+        closeLegacySelectorTransport(args.selector, result.environment.id)
       }
       return result
     }

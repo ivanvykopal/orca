@@ -12,6 +12,7 @@ packages:
   - src/packages/*
 
 minimumReleaseAge: 4320
+
 shamefullyHoist: true
 
 # Orca always launches the user's own resolved Claude CLI via

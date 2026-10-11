@@ -59,6 +59,7 @@ export function RuntimeEnvironmentsPane({
 }: RuntimeEnvironmentsPaneProps): React.JSX.Element {
   const [pendingSwitchValue, setPendingSwitchValue] = useState<string | null>(null)
   const [pendingRemove, setPendingRemove] = useState<PublicKnownRuntimeEnvironment | null>(null)
+  const [pendingUpdate, setPendingUpdate] = useState<PublicKnownRuntimeEnvironment | null>(null)
   const [addServerFormOpen, setAddServerFormOpen] = useState(false)
   const [shareServerFormOpen, setShareServerFormOpen] = useState(true)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -118,6 +119,10 @@ export function RuntimeEnvironmentsPane({
     setAddServerFailure,
     closeAddServerForm,
     addEnvironment,
+    updateFailure,
+    setUpdateFailure,
+    closeUpdateForm,
+    updateEnvironment,
     removeEnvironment
   } = useRuntimeEnvironmentMutationActions({
     environments,
@@ -158,6 +163,17 @@ export function RuntimeEnvironmentsPane({
   const removingActiveServer = pendingRemove
     ? isRuntimeEnvironmentRemovalBlocked(settings.activeRuntimeEnvironmentId, pendingRemove.id)
     : false
+  const openRepairForm = (environment: PublicKnownRuntimeEnvironment): void => {
+    setAddServerFormOpen(false)
+    setAddServerFailure(null)
+    setPairingCode('')
+    setUpdateFailure(null)
+    setPendingUpdate(environment)
+  }
+  const closeUpdateFormAndClear = (): void => {
+    closeUpdateForm()
+    setPendingUpdate(null)
+  }
   const searchEntry = canGeneratePairingUrl
     ? getRuntimeEnvironmentsSearchEntry()
     : getWebRuntimeEnvironmentsSearchEntry()
@@ -209,10 +225,12 @@ export function RuntimeEnvironmentsPane({
         environments={environments}
         detailsByEnvironmentId={detailsByEnvironmentId}
         activeRuntimeEnvironmentId={settings.activeRuntimeEnvironmentId}
-        addServerFormOpen={addServerFormOpen}
+        addServerFormOpen={addServerFormOpen && !pendingUpdate}
+        pendingUpdate={pendingUpdate}
         name={name}
         pairingCode={pairingCode}
         addServerFailure={addServerFailure}
+        updateFailure={updateFailure}
         isBusy={isBusy}
         remoteServerUpdates={remoteServerUpdates}
         remoteServerUpdatesChecking={remoteServerUpdatesChecking}
@@ -221,14 +239,27 @@ export function RuntimeEnvironmentsPane({
         switchingValue={switchingValue}
         disconnectingId={disconnectingId}
         removingId={removingId}
-        onOpenAddServerForm={() => setAddServerFormOpen(true)}
+        onOpenAddServerForm={() => {
+          setPendingUpdate(null)
+          setAddServerFormOpen(true)
+        }}
         onCloseAddServerForm={closeAddServerForm}
+        onOpenRepair={openRepairForm}
+        onCloseUpdateForm={closeUpdateFormAndClear}
+        onUpdateEnvironment={(environment, submit) => {
+          void updateEnvironment(environment, submit).then((updated) => {
+            if (updated && mountedRef.current) {
+              setPendingUpdate(null)
+            }
+          })
+        }}
         onNameChange={setName}
         onPairingCodeChange={(value) => {
           setPairingCode(value)
           setAddServerFailure(null)
+          setUpdateFailure(null)
         }}
-        onAddEnvironment={(allowLoopback) => void addEnvironment(allowLoopback)}
+        onAddEnvironment={(submit) => void addEnvironment(submit)}
         onOpenUpdateDialog={() => setRemoteServerUpdateDialogOpen(true)}
         refreshRemoteServerUpdates={refreshRemoteServerUpdates}
         onConnect={(environment) => void connectEnvironment(environment)}

@@ -1,4 +1,4 @@
-import { AlertTriangle, Loader2, Server, ServerOff, Trash2 } from 'lucide-react'
+import { AlertTriangle, KeyRound, Loader2, Server, ServerOff, Trash2 } from 'lucide-react'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
 import { translate } from '@/i18n/i18n'
@@ -38,6 +38,7 @@ type RuntimeServerRowProps = {
   removing: boolean
   isBusy: boolean
   onOpenUpdate: () => void
+  onRepair: (environment: PublicKnownRuntimeEnvironment) => void
   onDisconnect: (environment: PublicKnownRuntimeEnvironment) => void
   onConnect: (environment: PublicKnownRuntimeEnvironment) => void
   onRemove: (environment: PublicKnownRuntimeEnvironment) => void
@@ -55,6 +56,7 @@ export function RuntimeServerRow({
   removing,
   isBusy,
   onOpenUpdate,
+  onRepair,
   onDisconnect,
   onConnect,
   onRemove
@@ -196,6 +198,17 @@ export function RuntimeServerRow({
             {translate('auto.components.settings.RuntimeEnvironmentsPane.updateServer', 'Update')}
           </Button>
         ) : null}
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          className="gap-1.5"
+          onClick={() => onRepair(environment)}
+          disabled={isBusy}
+        >
+          <KeyRound className="size-3" />
+          {translate('auto.components.settings.RuntimeEnvironmentsPane.repair', 'Re-pair')}
+        </Button>
         {isReachable ? (
           <Button
             type="button"

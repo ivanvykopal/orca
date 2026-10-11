@@ -5,7 +5,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { isRuntimeEnvironmentRemovalBlocked } from './runtime-environment-host-details'
-import type { RuntimeHostAccessFailure } from './RuntimeHostAccessForm'
+import type { RuntimeHostAccessFailure, RuntimeHostAccessSubmit } from './RuntimeHostAccessForm'
 
 type RuntimeEnvironmentMutationActionParams = {
   environments: PublicKnownRuntimeEnvironment[]
@@ -35,6 +35,7 @@ export function useRuntimeEnvironmentMutationActions({
   const [name, setName] = useState('')
   const [pairingCode, setPairingCode] = useState('')
   const [addServerFailure, setAddServerFailure] = useState<RuntimeHostAccessFailure | null>(null)
+  const [updateFailure, setUpdateFailure] = useState<RuntimeHostAccessFailure | null>(null)
 
   const closeAddServerForm = (): void => {
     if (isSaving) {
@@ -46,7 +47,7 @@ export function useRuntimeEnvironmentMutationActions({
     setAddServerFailure(null)
   }
 
-  const addEnvironment = async (allowLoopback: boolean): Promise<void> => {
+  const addEnvironment = async (submit: RuntimeHostAccessSubmit): Promise<void> => {
     const trimmedName = name.trim()
     const trimmedPairingCode = pairingCode.trim()
     if (!trimmedName || !trimmedPairingCode) {
@@ -77,7 +78,8 @@ export function useRuntimeEnvironmentMutationActions({
       const result = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
         name: trimmedName,
         pairingCode: trimmedPairingCode,
-        allowLoopback
+        allowLoopback: submit.allowLoopback,
+        ...(submit.vsCodeTunnel ? { vsCodeTunnel: submit.vsCodeTunnel } : {})
       })
       if (!result.ok) {
         if (mountedRef.current) {
@@ -125,6 +127,81 @@ export function useRuntimeEnvironmentMutationActions({
               )
         )
       }
+    } finally {
+      if (mountedRef.current) {
+        setIsSaving(false)
+      }
+    }
+  }
+
+  const closeUpdateForm = (): void => {
+    if (isSaving) {
+      return
+    }
+    setPairingCode('')
+    setUpdateFailure(null)
+  }
+
+  const updateEnvironment = async (
+    environment: PublicKnownRuntimeEnvironment,
+    submit: RuntimeHostAccessSubmit
+  ): Promise<boolean> => {
+    const trimmedPairingCode = pairingCode.trim()
+    if (!trimmedPairingCode && !submit.vsCodeTunnel) {
+      toast.error(
+        translate(
+          'auto.components.settings.RuntimeEnvironmentsPane.updateRequiresInput',
+          'Provide a new access link or VS Code tunnel details to update this server.'
+        )
+      )
+      return false
+    }
+    setUpdateFailure(null)
+    setIsSaving(true)
+    try {
+      const result = await window.api.runtimeEnvironments.updateFromPairingCode({
+        selector: environment.id,
+        ...(trimmedPairingCode
+          ? { pairingCode: trimmedPairingCode, allowLoopback: submit.allowLoopback }
+          : {}),
+        ...(submit.vsCodeTunnel ? { vsCodeTunnel: submit.vsCodeTunnel } : {})
+      })
+      if (!result.ok) {
+        if (mountedRef.current) {
+          setUpdateFailure({ kind: result.kind, message: result.message })
+        }
+        return false
+      }
+      if (mountedRef.current) {
+        setPairingCode('')
+        setUpdateFailure(null)
+      }
+      await loadEnvironments({
+        environmentId: result.environment.id,
+        runtimeStatus: result.runtimeStatus
+      })
+      if (mountedRef.current) {
+        toast.success(
+          translate(
+            'auto.components.settings.RuntimeEnvironmentsPane.serverUpdated',
+            'Updated {{value0}}.',
+            { value0: result.environment.name }
+          )
+        )
+      }
+      return true
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.settings.RuntimeEnvironmentsPane.updateFailed',
+              'Failed to update runtime environment.'
+            )
+      if (mountedRef.current) {
+        toast.error(message)
+      }
+      return false
     } finally {
       if (mountedRef.current) {
         setIsSaving(false)
@@ -189,6 +266,10 @@ export function useRuntimeEnvironmentMutationActions({
     setAddServerFailure,
     closeAddServerForm,
     addEnvironment,
+    updateFailure,
+    setUpdateFailure,
+    closeUpdateForm,
+    updateEnvironment,
     removeEnvironment
   }
 }

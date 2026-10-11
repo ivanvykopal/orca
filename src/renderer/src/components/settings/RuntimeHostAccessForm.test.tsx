@@ -44,6 +44,36 @@ describe('RuntimeHostAccessForm', () => {
     expect(markup).toContain('disabled')
   })
 
+  it('shows the VS Code tunnel option with URL and token fields', () => {
+    const markup = renderForm('ws://100.76.32.125:6768')
+    expect(markup).toContain('Connect through a VS Code tunnel')
+    expect(markup).toContain(
+      'The link destination is reached through the tunnel URL instead of directly.'
+    )
+    // Why: the SSH-tunnel loopback override must still render for loopback links.
+    const loopbackMarkup = renderForm('ws://127.0.0.1:6768')
+    expect(loopbackMarkup).toContain('I am using an SSH tunnel to this local address')
+  })
+
+  it('renders update mode without the name field and with an optional access link', () => {
+    const markup = renderToStaticMarkup(
+      <RuntimeHostAccessForm
+        name="desk"
+        accessLink=""
+        busy={false}
+        failure={null}
+        updateMode
+        onNameChange={vi.fn()}
+        onAccessLinkChange={vi.fn()}
+        onCancel={vi.fn()}
+        onSubmit={vi.fn()}
+      />
+    )
+    expect(markup).toContain('Access link (optional)')
+    expect(markup).toContain('Update server')
+    expect(markup).not.toContain('runtime-server-name')
+  })
+
   it('shows actionable validation for malformed access links', () => {
     const markup = renderToStaticMarkup(
       <RuntimeHostAccessForm
