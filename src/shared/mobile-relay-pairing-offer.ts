@@ -77,9 +77,6 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
       // offer, while relayHostId is verified from its decoded bytes later.
       publicKeyB64: z.string().min(1).max(PAIRING_PUBLIC_KEY_MAX_CHARACTERS),
       pairedDeviceId: z.string().min(1).max(128).optional(),
-      // Why: set client-side when a runtime offer is reached through a VS Code
-      // tunnel; sent in the X-Tunnel-Authorization header on the WebSocket upgrade.
-      tunnelAccessToken: z.string().min(1).max(4096).optional(),
       scope: PairingScopeSchema.optional(),
       relay: relaySchema.optional(),
       // Why catch: a descriptor this build cannot read is dropped, never a reason to refuse pairing.

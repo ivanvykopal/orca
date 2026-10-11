@@ -9,18 +9,13 @@ export const RuntimeAccessEndpointSchema = z.object({
   label: z.string().min(1),
   endpoint: z.string().min(1),
   deviceToken: z.string().min(1),
-  publicKeyB64: z.string().min(1),
-  tunnelAccessToken: z.string().min(1).optional()
+  publicKeyB64: z.string().min(1)
 })
 
 export const PublicRuntimeAccessEndpointSchema = RuntimeAccessEndpointSchema.omit({
   deviceToken: true,
-  publicKeyB64: true,
-  tunnelAccessToken: true
+  publicKeyB64: true
 })
-
-export const RuntimeConnectionDependencySchema = z.enum(['ssh-tunnel', 'code-tunnel'])
-export type RuntimeConnectionDependency = z.infer<typeof RuntimeConnectionDependencySchema>
 
 export type PublicRuntimeAccessEndpoint = z.infer<typeof PublicRuntimeAccessEndpointSchema>
 
@@ -72,7 +67,7 @@ export const PersistedRuntimeEnvironmentSchema = z.object({
   lastUsedAt: z.number().finite().nullable(),
   runtimeId: z.string().min(1).nullable(),
   source: RuntimeEnvironmentSourceSchema.optional(),
-  connectionDependency: RuntimeConnectionDependencySchema.optional(),
+  connectionDependency: z.literal('ssh-tunnel').optional(),
   endpoints: z.array(RuntimeAccessEndpointSchema).min(1),
   preferredEndpointId: z.string().min(1)
 })
@@ -150,8 +145,7 @@ export function redactRuntimeEnvironment(
   return {
     ...environment,
     endpoints: environment.endpoints.map(
-      ({ deviceToken: _deviceToken, publicKeyB64: _key, tunnelAccessToken: _token, ...rest }) =>
-        rest
+      ({ deviceToken: _deviceToken, publicKeyB64: _key, ...rest }) => rest
     )
   }
 }
@@ -172,7 +166,7 @@ export function createEnvironmentFromPairingOffer(args: {
   offer: PairingOffer
   runtimeId?: string | null
   source?: RuntimeEnvironmentSource
-  connectionDependency?: RuntimeConnectionDependency
+  connectionDependency?: 'ssh-tunnel'
 }): KnownRuntimeEnvironment {
   const endpointId = `ws-${args.id}`
   return KnownRuntimeEnvironmentSchema.parse({
@@ -193,8 +187,7 @@ export function createEnvironmentFromPairingOffer(args: {
         label: 'WebSocket',
         endpoint: args.offer.endpoint,
         deviceToken: args.offer.deviceToken,
-        publicKeyB64: args.offer.publicKeyB64,
-        ...(args.offer.tunnelAccessToken ? { tunnelAccessToken: args.offer.tunnelAccessToken } : {})
+        publicKeyB64: args.offer.publicKeyB64
       }
     ],
     preferredEndpointId: endpointId
@@ -225,7 +218,6 @@ export function getPreferredPairingOffer(environment: KnownRuntimeEnvironment): 
     endpoint: endpoint.endpoint,
     deviceToken: endpoint.deviceToken,
     publicKeyB64: endpoint.publicKeyB64,
-    ...(endpoint.tunnelAccessToken ? { tunnelAccessToken: endpoint.tunnelAccessToken } : {}),
     ...(environment.pairedDeviceId ? { pairedDeviceId: environment.pairedDeviceId } : {})
   }
 }

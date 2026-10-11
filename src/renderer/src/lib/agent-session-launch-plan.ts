@@ -138,26 +138,6 @@ function beginStructuredPlanLaunch(
   }
 }
 
-function beginStructuredPlanLaunch(
-  verdict: AgentSessionLaunchVerdict,
-  hooks: StructuredAgentLaunchHooks,
-  target?: AgentSessionLaunchTarget
-): StructuredAgentLaunchHandle | null {
-  if (verdict.route !== 'structured-native-chat' || !isAgentSessionHandleProvider(verdict.agent)) {
-    return null
-  }
-  const worktreeId = target?.worktreeId ?? verdict.worktreeId
-  if (!worktreeId) {
-    throw new Error('A structured agent launch needs the workspace it targets.')
-  }
-  return beginStructuredAgentLaunchSettlement(
-    worktreeId,
-    verdict.agent,
-    structuredLaunchOptions(verdict),
-    hooks
-  )
-}
-
 /** Re-enter with a verdict decided earlier; the route is data here and is never re-resolved. */
 export function adoptAgentSessionLaunchVerdict(
   verdict: AgentSessionLaunchVerdict

@@ -25,10 +25,6 @@ import { getLocalWorktreeScanGeneration } from '../../local-worktree-scan-genera
 // connected session has always read the host's `$HOME`. The removal guards refuse without it.
 beforeEach(resetWorktreeTestSshHostHome)
 
-// Why: these fixtures register an SSH provider, which models a connected relay session — and a
-// connected session has always read the host's `$HOME`. The removal guards refuse without it.
-beforeEach(resetWorktreeTestSshHostHome)
-
 const REMOTE_REPO_PATH = '/remote/repo'
 
 function missingPath(): never {

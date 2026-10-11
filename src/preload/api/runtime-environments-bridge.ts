@@ -8,7 +8,6 @@ import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { PublicKnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime-shared-control-types'
-import type { VsCodeTunnelConfig } from '../../shared/vscode-tunnel-pairing'
 import { RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL } from '../../shared/runtime-environment-diagnostics'
 import {
   subscribeRuntimeEnvironmentFromPreload,
@@ -39,16 +38,8 @@ export const runtimeEnvironmentsApi = {
     name: string
     pairingCode: string
     allowLoopback?: boolean
-    vsCodeTunnel?: VsCodeTunnelConfig
   }): Promise<VerifyAndAddRuntimeEnvironmentResult> =>
     ipcRenderer.invoke('runtimeEnvironments:verifyAndAddFromPairingCode', args),
-  updateFromPairingCode: (args: {
-    selector: string
-    pairingCode?: string
-    allowLoopback?: boolean
-    vsCodeTunnel?: VsCodeTunnelConfig
-  }): Promise<VerifyAndAddRuntimeEnvironmentResult> =>
-    ipcRenderer.invoke('runtimeEnvironments:updateFromPairingCode', args),
   resolve: (args: { selector: string }): Promise<PublicKnownRuntimeEnvironment> =>
     ipcRenderer.invoke('runtimeEnvironments:resolve', args),
   remove: (args: { selector: string }): Promise<{ removed: PublicKnownRuntimeEnvironment }> =>

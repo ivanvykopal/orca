@@ -9,18 +9,11 @@ export function AddRemoteHostServerFormPanel({
   pairingCode,
   parsedLink,
   allowLoopback,
-  useVsCodeTunnel,
-  tunnelUrl,
-  tunnelAccessToken,
-  serverError,
   disabled,
   canSubmit,
   onNameChange,
   onPairingCodeChange,
   onAllowLoopbackChange,
-  onUseVsCodeTunnelChange,
-  onTunnelUrlChange,
-  onTunnelAccessTokenChange,
   onSubmit,
   onCancel
 }: {
@@ -28,18 +21,11 @@ export function AddRemoteHostServerFormPanel({
   pairingCode: string
   parsedLink: ParseHostAccessLinkResult
   allowLoopback: boolean
-  useVsCodeTunnel: boolean
-  tunnelUrl: string
-  tunnelAccessToken: string
-  serverError: string | null
   disabled: boolean
   canSubmit: boolean
   onNameChange: (value: string) => void
   onPairingCodeChange: (value: string) => void
   onAllowLoopbackChange: (value: boolean) => void
-  onUseVsCodeTunnelChange: (value: boolean) => void
-  onTunnelUrlChange: (value: string) => void
-  onTunnelAccessTokenChange: (value: string) => void
   onSubmit: () => void
   onCancel: () => void
 }): React.JSX.Element {
@@ -69,13 +55,6 @@ export function AddRemoteHostServerFormPanel({
         onPairingCodeChange={onPairingCodeChange}
         allowLoopback={allowLoopback}
         onAllowLoopbackChange={onAllowLoopbackChange}
-        useVsCodeTunnel={useVsCodeTunnel}
-        tunnelUrl={tunnelUrl}
-        tunnelAccessToken={tunnelAccessToken}
-        serverError={serverError}
-        onUseVsCodeTunnelChange={onUseVsCodeTunnelChange}
-        onTunnelUrlChange={onTunnelUrlChange}
-        onTunnelAccessTokenChange={onTunnelAccessTokenChange}
         onSubmit={onSubmit}
       />
 

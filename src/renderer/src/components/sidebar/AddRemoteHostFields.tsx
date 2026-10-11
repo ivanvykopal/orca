@@ -148,13 +148,6 @@ export function RemoteServerFields({
   onPairingCodeChange,
   allowLoopback,
   onAllowLoopbackChange,
-  useVsCodeTunnel,
-  tunnelUrl,
-  tunnelAccessToken,
-  serverError,
-  onUseVsCodeTunnelChange,
-  onTunnelUrlChange,
-  onTunnelAccessTokenChange,
   onSubmit
 }: {
   name: string
@@ -165,21 +158,11 @@ export function RemoteServerFields({
   onPairingCodeChange: (value: string) => void
   allowLoopback: boolean
   onAllowLoopbackChange: (value: boolean) => void
-  useVsCodeTunnel: boolean
-  tunnelUrl: string
-  tunnelAccessToken: string
-  serverError: string | null
-  onUseVsCodeTunnelChange: (value: boolean) => void
-  onTunnelUrlChange: (value: string) => void
-  onTunnelAccessTokenChange: (value: string) => void
   onSubmit: () => void
 }) {
   const inputError = pairingCode.trim() !== '' && !parsedLink.ok
   const loopbackBlocked =
-    parsedLink.ok &&
-    parsedLink.value.endpointKind === 'loopback' &&
-    !allowLoopback &&
-    !useVsCodeTunnel
+    parsedLink.ok && parsedLink.value.endpointKind === 'loopback' && !allowLoopback
   const pairingCodeDescriptionId = inputError
     ? 'add-server-pairing-code-error'
     : loopbackBlocked
@@ -250,69 +233,11 @@ export function RemoteServerFields({
             </Badge>
           </div>
           <div className="font-mono text-sm">{parsedLink.value.displayEndpoint}</div>
-          <label className="mt-2 flex items-start gap-2 text-xs">
-            <Checkbox
-              checked={useVsCodeTunnel}
-              disabled={disabled}
-              onCheckedChange={(checked) => onUseVsCodeTunnelChange(checked === true)}
-            />
-            <span>
-              <span className="block font-medium">
-                {translate(
-                  'auto.components.sidebar.AddRemoteHostDialog.vsCodeTunnel',
-                  'Connect through a VS Code tunnel'
-                )}
-              </span>
-              <span className="text-muted-foreground">
-                {translate(
-                  'auto.components.sidebar.AddRemoteHostDialog.vsCodeTunnelHelp',
-                  'The link destination is reached through the tunnel URL instead of directly.'
-                )}
-              </span>
-            </span>
-          </label>
-          {useVsCodeTunnel ? (
-            <div className="mt-2 space-y-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="add-server-tunnel-url">
-                  {translate(
-                    'auto.components.sidebar.AddRemoteHostDialog.vsCodeTunnelUrl',
-                    'Tunnel URL'
-                  )}
-                </Label>
-                <Input
-                  id="add-server-tunnel-url"
-                  value={tunnelUrl}
-                  disabled={disabled}
-                  onChange={(event) => onTunnelUrlChange(event.target.value)}
-                  placeholder="https://my-tunnel-39271.devtunnels.ms"
-                  className="font-mono"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="add-server-tunnel-token">
-                  {translate(
-                    'auto.components.sidebar.AddRemoteHostDialog.vsCodeTunnelToken',
-                    'Access token'
-                  )}
-                </Label>
-                <Input
-                  id="add-server-tunnel-token"
-                  type="password"
-                  value={tunnelAccessToken}
-                  disabled={disabled}
-                  onChange={(event) => onTunnelAccessTokenChange(event.target.value)}
-                  placeholder="tunnel access token"
-                  className="font-mono"
-                />
-              </div>
-            </div>
-          ) : null}
           {parsedLink.value.endpointKind === 'loopback' ? (
             <label className="mt-2 flex items-start gap-2 text-xs">
               <Checkbox
                 checked={allowLoopback}
-                disabled={disabled || useVsCodeTunnel}
+                disabled={disabled}
                 onCheckedChange={(checked) => onAllowLoopbackChange(checked === true)}
               />
               <span>
@@ -332,11 +257,6 @@ export function RemoteServerFields({
             </label>
           ) : null}
         </div>
-      ) : null}
-      {serverError ? (
-        <p id="add-server-save-error" role="alert" className="text-xs text-destructive">
-          {serverError}
-        </p>
       ) : null}
       {loopbackBlocked ? (
         <p id="add-server-loopback-blocked" role="alert" className="text-xs text-destructive">

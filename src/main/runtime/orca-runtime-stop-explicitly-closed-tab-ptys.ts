@@ -39,15 +39,6 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
         ) {
           stopped = true
         }
-        // Preserve an observed exit when a broader inventory check could not finish.
-        if (
-          !stopped &&
-          expectedIncarnationId &&
-          this.ptysById.get(ptyId)?.incarnationId === expectedIncarnationId &&
-          this.getPtyLivenessVerdict(ptyId)?.status === 'exited'
-        ) {
-          stopped = true
-        }
         if (!stopped) {
           const verdict = this.getPtyLivenessVerdict(ptyId)
           const providerAlreadyRetiredPty =

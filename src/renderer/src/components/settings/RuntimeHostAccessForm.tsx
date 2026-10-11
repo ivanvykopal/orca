@@ -1,16 +1,13 @@
 import { ChevronDown, Loader2, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { cn } from '@/lib/utils'
 import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
 import type { RemotePairingFailureKind } from '../../../../shared/remote-pairing-verification'
-import type { VsCodeTunnelConfig } from '../../../../shared/vscode-tunnel-pairing'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Checkbox } from '../ui/checkbox'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { translate } from '@/i18n/i18n'
-import { RuntimeHostVsCodeTunnelFields } from './RuntimeHostVsCodeTunnelFields'
 import {
   translateHostAccessLinkError,
   translateRemotePairingEndpointKind,
@@ -22,21 +19,15 @@ export type RuntimeHostAccessFailure = {
   message: string
 }
 
-export type RuntimeHostAccessSubmit = {
-  allowLoopback: boolean
-  vsCodeTunnel?: VsCodeTunnelConfig
-}
-
 type RuntimeHostAccessFormProps = {
   name: string
   accessLink: string
   busy: boolean
   failure: RuntimeHostAccessFailure | null
-  updateMode?: boolean
   onNameChange: (value: string) => void
   onAccessLinkChange: (value: string) => void
   onCancel: () => void
-  onSubmit: (submit: RuntimeHostAccessSubmit) => void
+  onSubmit: (allowLoopback: boolean) => void
 }
 
 export function RuntimeHostAccessForm({
@@ -44,24 +35,17 @@ export function RuntimeHostAccessForm({
   accessLink,
   busy,
   failure,
-  updateMode = false,
   onNameChange,
   onAccessLinkChange,
   onCancel,
   onSubmit
 }: RuntimeHostAccessFormProps): React.JSX.Element {
   const [allowLoopback, setAllowLoopback] = useState(false)
-  const [useVsCodeTunnel, setUseVsCodeTunnel] = useState(false)
-  const [tunnelUrl, setTunnelUrl] = useState('')
-  const [tunnelAccessToken, setTunnelAccessToken] = useState('')
   const parsed = useMemo(() => parseHostAccessLink(accessLink), [accessLink])
   const tunnelOverrideEnabled =
     allowLoopback && parsed.ok && parsed.value.endpointKind === 'loopback'
   const loopbackBlocked =
-    parsed.ok &&
-    parsed.value.endpointKind === 'loopback' &&
-    !tunnelOverrideEnabled &&
-    !useVsCodeTunnel
+    parsed.ok && parsed.value.endpointKind === 'loopback' && !tunnelOverrideEnabled
   const inputError = accessLink.trim() !== '' && !parsed.ok
   const describedBy = failure
     ? 'runtime-server-verification-error'
@@ -70,14 +54,7 @@ export function RuntimeHostAccessForm({
       : loopbackBlocked
         ? 'runtime-server-loopback-error'
         : 'runtime-server-access-link-help'
-  const tunnelFieldsComplete = tunnelUrl.trim() !== '' && tunnelAccessToken.trim() !== ''
-  const linkUsable = parsed.ok || (updateMode && useVsCodeTunnel && tunnelFieldsComplete)
-  const canSubmit =
-    (updateMode || name.trim() !== '') &&
-    linkUsable &&
-    !loopbackBlocked &&
-    (!useVsCodeTunnel || tunnelFieldsComplete) &&
-    !busy
+  const canSubmit = name.trim() !== '' && parsed.ok && !loopbackBlocked && !busy
 
   return (
     <form
@@ -85,17 +62,7 @@ export function RuntimeHostAccessForm({
       onSubmit={(event) => {
         event.preventDefault()
         if (canSubmit) {
-          onSubmit({
-            allowLoopback: tunnelOverrideEnabled,
-            ...(useVsCodeTunnel
-              ? {
-                  vsCodeTunnel: {
-                    url: tunnelUrl.trim(),
-                    accessToken: tunnelAccessToken.trim()
-                  }
-                }
-              : {})
-          })
+          onSubmit(tunnelOverrideEnabled)
         }
       }}
     >
@@ -128,44 +95,32 @@ export function RuntimeHostAccessForm({
         </ol>
       </div>
 
-      <div
-        className={cn('grid gap-3', !updateMode && 'sm:grid-cols-[minmax(0,180px)_minmax(0,1fr)]')}
-      >
-        {!updateMode ? (
-          <div className="space-y-2">
-            <Label htmlFor="runtime-server-name">
-              {translate('auto.components.settings.RuntimeHostAccessForm.name', 'Name in Orca')}
-            </Label>
-            <Input
-              id="runtime-server-name"
-              value={name}
-              disabled={busy}
-              onChange={(event) => onNameChange(event.target.value)}
-              placeholder={translate(
-                'auto.components.settings.RuntimeHostAccessForm.namePlaceholder',
-                'Linux workstation'
-              )}
-              autoFocus
-            />
-            <p className="text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.RuntimeHostAccessForm.nameHelp',
-                'This only changes how the computer appears in Orca.'
-              )}
-            </p>
-          </div>
-        ) : null}
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,180px)_minmax(0,1fr)]">
+        <div className="space-y-2">
+          <Label htmlFor="runtime-server-name">
+            {translate('auto.components.settings.RuntimeHostAccessForm.name', 'Name in Orca')}
+          </Label>
+          <Input
+            id="runtime-server-name"
+            value={name}
+            disabled={busy}
+            onChange={(event) => onNameChange(event.target.value)}
+            placeholder={translate(
+              'auto.components.settings.RuntimeHostAccessForm.namePlaceholder',
+              'Linux workstation'
+            )}
+            autoFocus
+          />
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.RuntimeHostAccessForm.nameHelp',
+              'This only changes how the computer appears in Orca.'
+            )}
+          </p>
+        </div>
         <div className="space-y-2">
           <Label htmlFor="runtime-server-access-link">
-            {updateMode
-              ? translate(
-                  'auto.components.settings.RuntimeHostAccessForm.accessLinkOptional',
-                  'Access link (optional)'
-                )
-              : translate(
-                  'auto.components.settings.RuntimeHostAccessForm.accessLink',
-                  'Access link'
-                )}
+            {translate('auto.components.settings.RuntimeHostAccessForm.accessLink', 'Access link')}
           </Label>
           <Input
             id="runtime-server-access-link"
@@ -184,15 +139,10 @@ export function RuntimeHostAccessForm({
             className="min-w-0 font-mono"
           />
           <p id="runtime-server-access-link-help" className="text-xs text-muted-foreground">
-            {updateMode
-              ? translate(
-                  'auto.components.settings.RuntimeHostAccessForm.accessLinkUpdateHelp',
-                  'Paste a fresh access link to re-pair this server, or leave it empty and provide only the tunnel details.'
-                )
-              : translate(
-                  'auto.components.settings.RuntimeHostAccessForm.accessLinkHelp',
-                  'Orca shows the destination before connecting. Credentials stay hidden.'
-                )}
+            {translate(
+              'auto.components.settings.RuntimeHostAccessForm.accessLinkHelp',
+              'Orca shows the destination before connecting. Credentials stay hidden.'
+            )}
           </p>
           {inputError ? (
             <p id="runtime-server-access-link-error" className="text-xs text-destructive">
@@ -218,38 +168,6 @@ export function RuntimeHostAccessForm({
           <div className="font-mono text-sm" aria-live="polite">
             {parsed.value.displayEndpoint}
           </div>
-          <RuntimeHostVsCodeTunnelFields
-            useVsCodeTunnel={useVsCodeTunnel}
-            tunnelUrl={tunnelUrl}
-            tunnelAccessToken={tunnelAccessToken}
-            busy={busy}
-            onUseVsCodeTunnelChange={setUseVsCodeTunnel}
-            onTunnelUrlChange={setTunnelUrl}
-            onTunnelAccessTokenChange={setTunnelAccessToken}
-          />
-          {parsed.value.endpointKind === 'loopback' ? (
-            <label className="mt-2 flex items-start gap-2 text-xs">
-              <Checkbox
-                checked={allowLoopback}
-                disabled={busy || useVsCodeTunnel}
-                onCheckedChange={(checked) => setAllowLoopback(checked === true)}
-              />
-              <span>
-                <span className="block font-medium">
-                  {translate(
-                    'auto.components.settings.RuntimeHostAccessForm.sshTunnel',
-                    'I am using an SSH tunnel to this local address'
-                  )}
-                </span>
-                <span className="text-muted-foreground">
-                  {translate(
-                    'auto.components.settings.RuntimeHostAccessForm.sshTunnelHelp',
-                    'Keep the tunnel active while using this connection.'
-                  )}
-                </span>
-              </span>
-            </label>
-          ) : null}
         </div>
       ) : null}
 
@@ -372,12 +290,36 @@ export function RuntimeHostAccessForm({
           {translate('auto.components.settings.RuntimeHostAccessForm.advanced', 'Advanced')}
           <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" />
         </summary>
-        <p className="mt-2 text-muted-foreground">
-          {translate(
-            'auto.components.settings.RuntimeHostAccessForm.headlessHelp',
-            'Using headless orca serve? Run orca serve --pairing-address <reachable-host> on the other computer.'
-          )}
-        </p>
+        {parsed.ok && parsed.value.endpointKind === 'loopback' ? (
+          <label className="mt-3 flex items-start gap-2 rounded-md border border-border/60 p-3">
+            <Checkbox
+              checked={allowLoopback}
+              disabled={busy}
+              onCheckedChange={(checked) => setAllowLoopback(checked === true)}
+            />
+            <span className="space-y-1">
+              <span className="block font-medium text-foreground">
+                {translate(
+                  'auto.components.settings.RuntimeHostAccessForm.sshTunnel',
+                  'I am using an SSH tunnel to this local address'
+                )}
+              </span>
+              <span className="block text-muted-foreground">
+                {translate(
+                  'auto.components.settings.RuntimeHostAccessForm.sshTunnelHelp',
+                  'Keep the tunnel active while using this connection.'
+                )}
+              </span>
+            </span>
+          </label>
+        ) : (
+          <p className="mt-2 text-muted-foreground">
+            {translate(
+              'auto.components.settings.RuntimeHostAccessForm.headlessHelp',
+              'Using headless orca serve? Run orca serve --pairing-address <reachable-host> on the other computer.'
+            )}
+          </p>
+        )}
       </details>
 
       <div className="flex justify-end gap-2">
@@ -386,17 +328,12 @@ export function RuntimeHostAccessForm({
         </Button>
         <Button type="submit" size="sm" disabled={!canSubmit}>
           {busy ? <Loader2 className="animate-spin" /> : <Plus />}
-          {updateMode
+          {tunnelOverrideEnabled
             ? translate(
-                'auto.components.settings.RuntimeHostAccessForm.updateHost',
-                'Update server'
+                'auto.components.settings.RuntimeHostAccessForm.addWithTunnel',
+                'Add host using tunnel'
               )
-            : tunnelOverrideEnabled
-              ? translate(
-                  'auto.components.settings.RuntimeHostAccessForm.addWithTunnel',
-                  'Add host using tunnel'
-                )
-              : translate('auto.components.settings.RuntimeHostAccessForm.addHost', 'Add host')}
+            : translate('auto.components.settings.RuntimeHostAccessForm.addHost', 'Add host')}
         </Button>
       </div>
     </form>

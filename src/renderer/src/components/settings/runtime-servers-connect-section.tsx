@@ -7,11 +7,7 @@ import { cn } from '@/lib/utils'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 import { Button } from '../ui/button'
 import type { RuntimeHostDetails } from './runtime-environment-host-details'
-import {
-  RuntimeHostAccessForm,
-  type RuntimeHostAccessFailure,
-  type RuntimeHostAccessSubmit
-} from './RuntimeHostAccessForm'
+import { RuntimeHostAccessForm, type RuntimeHostAccessFailure } from './RuntimeHostAccessForm'
 import { RuntimeServerRow } from './runtime-server-row'
 
 type RuntimeServersConnectSectionProps = {
@@ -20,11 +16,9 @@ type RuntimeServersConnectSectionProps = {
   detailsByEnvironmentId: Record<string, RuntimeHostDetails>
   activeRuntimeEnvironmentId: string | null | undefined
   addServerFormOpen: boolean
-  pendingUpdate: PublicKnownRuntimeEnvironment | null
   name: string
   pairingCode: string
   addServerFailure: RuntimeHostAccessFailure | null
-  updateFailure: RuntimeHostAccessFailure | null
   isBusy: boolean
   remoteServerUpdates: Map<string, RemoteServerUpdateEntry>
   remoteServerUpdatesChecking: boolean
@@ -35,15 +29,9 @@ type RuntimeServersConnectSectionProps = {
   removingId: string | null
   onOpenAddServerForm: () => void
   onCloseAddServerForm: () => void
-  onOpenRepair: (environment: PublicKnownRuntimeEnvironment) => void
-  onCloseUpdateForm: () => void
-  onUpdateEnvironment: (
-    environment: PublicKnownRuntimeEnvironment,
-    submit: RuntimeHostAccessSubmit
-  ) => void
   onNameChange: (value: string) => void
   onPairingCodeChange: (value: string) => void
-  onAddEnvironment: (submit: RuntimeHostAccessSubmit) => void
+  onAddEnvironment: (allowLoopback: boolean) => void
   onOpenUpdateDialog: () => void
   refreshRemoteServerUpdates: (options?: UpdateCheckOptions) => Promise<void>
   onConnect: (environment: PublicKnownRuntimeEnvironment) => void
@@ -57,11 +45,9 @@ export function RuntimeServersConnectSection({
   detailsByEnvironmentId,
   activeRuntimeEnvironmentId,
   addServerFormOpen,
-  pendingUpdate,
   name,
   pairingCode,
   addServerFailure,
-  updateFailure,
   isBusy,
   remoteServerUpdates,
   remoteServerUpdatesChecking,
@@ -72,9 +58,6 @@ export function RuntimeServersConnectSection({
   removingId,
   onOpenAddServerForm,
   onCloseAddServerForm,
-  onOpenRepair,
-  onCloseUpdateForm,
-  onUpdateEnvironment,
   onNameChange,
   onPairingCodeChange,
   onAddEnvironment,
@@ -154,20 +137,7 @@ export function RuntimeServersConnectSection({
         </div>
       </div>
 
-      {pendingUpdate ? (
-        <RuntimeHostAccessForm
-          key={pendingUpdate.id}
-          updateMode
-          name={pendingUpdate.name}
-          accessLink={pairingCode}
-          busy={isBusy}
-          failure={updateFailure}
-          onNameChange={onNameChange}
-          onAccessLinkChange={onPairingCodeChange}
-          onCancel={onCloseUpdateForm}
-          onSubmit={(submit) => onUpdateEnvironment(pendingUpdate, submit)}
-        />
-      ) : addServerFormOpen ? (
+      {addServerFormOpen ? (
         <RuntimeHostAccessForm
           name={name}
           accessLink={pairingCode}
@@ -204,7 +174,6 @@ export function RuntimeServersConnectSection({
                 removing={removingId === environment.id}
                 isBusy={isBusy}
                 onOpenUpdate={onOpenUpdateDialog}
-                onRepair={onOpenRepair}
                 onConnect={onConnect}
                 onDisconnect={onDisconnect}
                 onRemove={onRemove}

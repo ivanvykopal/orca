@@ -1,9 +1,6 @@
 import {
   addEnvironmentFromPairingCode,
-  resolveEnvironment,
-  resolveEnvironmentPairingOffer,
-  RuntimeEnvironmentStoreError,
-  updateEnvironmentFromPairingCode
+  RuntimeEnvironmentStoreError
 } from '../../shared/runtime-environment-store'
 import { parseHostAccessLink } from '../../shared/remote-pairing-address'
 import {
@@ -14,18 +11,12 @@ import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-err
 import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { redactRuntimeEnvironment } from '../../shared/runtime-environments'
-import {
-  applyVsCodeTunnelToPairingOffer,
-  type VsCodeTunnelConfig
-} from '../../shared/vscode-tunnel-pairing'
 import type { RuntimeStatus } from '../../shared/runtime-types'
-import type { PairingOffer } from '../../shared/pairing'
 
 type VerifyAndAddRuntimeEnvironmentArgs = {
   name: string
   pairingCode: string
   allowLoopback?: boolean
-  vsCodeTunnel?: VsCodeTunnelConfig
 }
 
 export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
@@ -36,19 +27,7 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   if (!parsed.ok) {
     return { ok: false, kind: 'access-link-invalid', message: parsed.message }
   }
-  // Why: a tunnel offer's relay endpoint is loopback on the remote machine by design;
-  // the rewrite replaces it with the tunnel URL before anything connects.
-  const tunnel = args.vsCodeTunnel
-    ? applyVsCodeTunnelToPairingOffer(parsed.value.pairing, args.vsCodeTunnel)
-    : null
-  if (tunnel && !tunnel.ok) {
-    return { ok: false, kind: 'access-link-invalid', message: tunnel.message }
-  }
-  const effectivePairing = tunnel?.ok ? tunnel.offer : parsed.value.pairing
-  const displayEndpoint = tunnel?.ok
-    ? new URL(tunnel.offer.endpoint).host
-    : parsed.value.displayEndpoint
-  if (parsed.value.endpointKind === 'loopback' && !args.allowLoopback && !tunnel) {
+  if (parsed.value.endpointKind === 'loopback' && !args.allowLoopback) {
     return {
       ok: false,
       kind: 'host-unreachable',
@@ -59,7 +38,7 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   let runtimeStatus: RuntimeStatus
   try {
     const response = await sendRemoteRuntimeRequest<RuntimeStatus>(
-      effectivePairing,
+      parsed.value.pairing,
       'status.get',
       undefined,
       15_000,
@@ -80,11 +59,10 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
     }
     runtimeStatus = statusVerification.runtimeStatus
   } catch (error) {
-    return classifyPairingVerificationError(error, displayEndpoint)
+    return classifyPairingVerificationError(error, parsed.value.displayEndpoint)
   }
 
-  const usesSshTunnel =
-    !tunnel && parsed.value.endpointKind === 'loopback' && args.allowLoopback === true
+  const usesSshTunnel = parsed.value.endpointKind === 'loopback' && args.allowLoopback === true
   let environment: ReturnType<typeof addEnvironmentFromPairingCode>
   try {
     environment = addEnvironmentFromPairingCode(userDataPath, {
@@ -105,113 +83,6 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
     ok: true,
     environment: redactRuntimeEnvironment(environment),
     runtimeStatus
-  }
-}
-
-type VerifyAndUpdateRuntimeEnvironmentArgs = {
-  selector: string
-  pairingCode?: string
-  allowLoopback?: boolean
-  vsCodeTunnel?: VsCodeTunnelConfig
-}
-
-/**
- * Re-pairs a saved environment in place: optionally with a fresh access link,
- * and optionally with a new VS Code tunnel config (URL/token refresh). With
- * neither, verification is skipped and the call is rejected up front.
- */
-export async function verifyAndUpdateRuntimeEnvironmentFromPairingCode(
-  userDataPath: string,
-  args: VerifyAndUpdateRuntimeEnvironmentArgs
-): Promise<VerifyAndAddRuntimeEnvironmentResult> {
-  if (!args.pairingCode && !args.vsCodeTunnel) {
-    return {
-      ok: false,
-      kind: 'access-link-invalid',
-      message: 'Provide a new access link or VS Code tunnel details to update.'
-    }
-  }
-  resolveEnvironment(userDataPath, args.selector)
-  let baseOffer: PairingOffer
-  let displayEndpoint: string
-  if (args.pairingCode) {
-    const parsed = parseHostAccessLink(args.pairingCode)
-    if (!parsed.ok) {
-      return { ok: false, kind: 'access-link-invalid', message: parsed.message }
-    }
-    if (parsed.value.endpointKind === 'loopback' && !args.allowLoopback && !args.vsCodeTunnel) {
-      return {
-        ok: false,
-        kind: 'host-unreachable',
-        message: 'This access link points back to this device.'
-      }
-    }
-    baseOffer = parsed.value.pairing
-    displayEndpoint = parsed.value.displayEndpoint
-  } else {
-    // Tunnel-only refresh: reuse the stored pairing credentials verbatim.
-    baseOffer = resolveEnvironmentPairingOffer(userDataPath, args.selector)
-    displayEndpoint = new URL(baseOffer.endpoint).host
-  }
-  // Why: a tunnel offer's relay endpoint is loopback on the remote machine by design;
-  // the rewrite replaces it with the tunnel URL before anything connects.
-  const tunnel = args.vsCodeTunnel
-    ? applyVsCodeTunnelToPairingOffer(baseOffer, args.vsCodeTunnel)
-    : null
-  if (tunnel && !tunnel.ok) {
-    return { ok: false, kind: 'access-link-invalid', message: tunnel.message }
-  }
-  const effectivePairing = tunnel?.ok ? tunnel.offer : baseOffer
-  if (tunnel?.ok) {
-    displayEndpoint = new URL(tunnel.offer.endpoint).host
-  }
-
-  let runtimeStatus: RuntimeStatus
-  try {
-    const response = await sendRemoteRuntimeRequest<RuntimeStatus>(
-      effectivePairing,
-      'status.get',
-      undefined,
-      15_000,
-      undefined,
-      undefined,
-      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
-    )
-    if (!response.ok) {
-      return {
-        ok: false,
-        kind: 'connection-interrupted',
-        message: response.error.message
-      }
-    }
-    const statusVerification = verifyRemotePairingRuntimeStatus(response.result)
-    if (!statusVerification.ok) {
-      return statusVerification
-    }
-    runtimeStatus = statusVerification.runtimeStatus
-  } catch (error) {
-    return classifyPairingVerificationError(error, displayEndpoint)
-  }
-
-  try {
-    const environment = updateEnvironmentFromPairingCode(userDataPath, args.selector, {
-      ...(args.pairingCode ? { pairingCode: args.pairingCode } : {}),
-      ...(args.vsCodeTunnel ? { vsCodeTunnel: args.vsCodeTunnel } : {})
-    })
-    return {
-      ok: true,
-      environment: redactRuntimeEnvironment(environment),
-      runtimeStatus
-    }
-  } catch (error) {
-    return {
-      ok: false,
-      kind: 'environment-save-failed',
-      message:
-        error instanceof RuntimeEnvironmentStoreError && error.code === 'invalid_argument'
-          ? error.message
-          : 'Orca verified the host but could not update the saved server.'
-    }
   }
 }
 

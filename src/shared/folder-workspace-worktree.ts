@@ -48,28 +48,6 @@ export function getFolderWorkspaceHostIdentity(
   )
 }
 
-/**
- * A folder workspace has no git repo, so its synthetic `Worktree` borrows the `repoId` slot to
- * name the PROJECT GROUP it belongs to. The value is never null, so a caller testing `repoId` for
- * absence to detect "no repo" will be wrong for every folder workspace.
- *
- * Minting and recognising it live together here so the two cannot drift.
- */
-const FOLDER_WORKSPACE_REPO_ID_PREFIX = 'folder-workspace:'
-
-export function folderWorkspaceRepoId(projectGroupId: string): string {
-  return `${FOLDER_WORKSPACE_REPO_ID_PREFIX}${projectGroupId}`
-}
-
-/** The project group a synthetic repoId stands for, or null when it names a real git repo. */
-export function projectGroupIdFromRepoId(repoId: string | null | undefined): string | null {
-  if (typeof repoId !== 'string' || !repoId.startsWith(FOLDER_WORKSPACE_REPO_ID_PREFIX)) {
-    return null
-  }
-  const projectGroupId = repoId.slice(FOLDER_WORKSPACE_REPO_ID_PREFIX.length)
-  return projectGroupId === '' ? null : projectGroupId
-}
-
 export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Worktree {
   const linkedTask = folderWorkspace.linkedTask
   const selectedTask = linkedTask

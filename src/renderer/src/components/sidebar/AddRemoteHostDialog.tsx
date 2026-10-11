@@ -56,10 +56,6 @@ export function AddRemoteHostDialog({
   const [serverName, setServerName] = useState('')
   const [pairingCode, setPairingCode] = useState('')
   const [allowLoopback, setAllowLoopback] = useState(false)
-  const [useVsCodeTunnel, setUseVsCodeTunnel] = useState(false)
-  const [tunnelUrl, setTunnelUrl] = useState('')
-  const [tunnelAccessToken, setTunnelAccessToken] = useState('')
-  const [serverError, setServerError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const configSearchGeneration = useRef(0)
   const configSearchQuery = useRef('')
@@ -68,8 +64,7 @@ export function AddRemoteHostDialog({
   const serverFormCanSubmit =
     serverName.trim() !== '' &&
     parsedServerLink.ok &&
-    (!useVsCodeTunnel || (tunnelUrl.trim() !== '' && tunnelAccessToken.trim() !== '')) &&
-    (parsedServerLink.value.endpointKind !== 'loopback' || allowLoopback || useVsCodeTunnel)
+    (parsedServerLink.value.endpointKind !== 'loopback' || allowLoopback)
   const setSshTargetsMetadata = useAppStore((s) => s.setSshTargetsMetadata)
   const recordSshRepoReadoptions = useAppStore((s) => s.recordSshRepoReadoptions)
   const setRuntimeEnvironments = useAppStore((s) => s.setRuntimeEnvironments)
@@ -100,11 +95,8 @@ export function AddRemoteHostDialog({
     setServerName('')
     setPairingCode('')
     setAllowLoopback(false)
-    setUseVsCodeTunnel(false)
-    setTunnelUrl('')
-    setServerError(null)
-    setTunnelAccessToken('')
   }
+
   const close = () => {
     // Why: a stuck resolve must not trap the dialog open — reset() invalidates it instead.
     if (isSaving || isBulkImporting) {
@@ -261,7 +253,7 @@ export function AddRemoteHostDialog({
       toast.error(translateHostAccessLinkError(parsedServerLink.kind))
       return
     }
-    if (parsedServerLink.value.endpointKind === 'loopback' && !allowLoopback && !useVsCodeTunnel) {
+    if (parsedServerLink.value.endpointKind === 'loopback' && !allowLoopback) {
       toast.error(
         translate(
           'auto.components.sidebar.AddRemoteHostDialog.loopbackBlocked',
@@ -276,26 +268,17 @@ export function AddRemoteHostDialog({
       const result = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
         name: trimmedName,
         pairingCode: trimmedPairingCode,
-        allowLoopback,
-        ...(useVsCodeTunnel
-          ? {
-              vsCodeTunnel: {
-                url: tunnelUrl.trim(),
-                accessToken: tunnelAccessToken.trim()
-              }
-            }
-          : {})
+        allowLoopback
       })
       if (!result.ok) {
-        const message =
+        toast.error(
           result.kind === 'environment-save-failed'
             ? result.message
             : translateRemotePairingFailureDescription(
                 result.kind,
-                useVsCodeTunnel ? tunnelUrl.trim() : parsedServerLink.value.displayEndpoint
+                parsedServerLink.value.displayEndpoint
               )
-        setServerError(message)
-        toast.error(message)
+        )
         return
       }
       const environments = await window.api.runtimeEnvironments.list()
@@ -307,15 +290,14 @@ export function AddRemoteHostDialog({
       reset()
       onOpenChange(null)
     } catch (error) {
-      const message =
+      toast.error(
         error instanceof Error
           ? error.message
           : translate(
               'auto.components.sidebar.AddRemoteHostDialog.serverSaveFailed',
               'Failed to add remote server.'
             )
-      setServerError(message)
-      toast.error(message)
+      )
     } finally {
       setIsSaving(false)
     }
@@ -374,32 +356,15 @@ export function AddRemoteHostDialog({
             pairingCode={pairingCode}
             parsedLink={parsedServerLink}
             allowLoopback={allowLoopback}
-            useVsCodeTunnel={useVsCodeTunnel}
-            tunnelUrl={tunnelUrl}
-            tunnelAccessToken={tunnelAccessToken}
-            serverError={serverError}
             disabled={busy}
             canSubmit={serverFormCanSubmit}
-            onNameChange={(value) => {
-              setServerName(value)
-              setServerError(null)
-            }}
+            onNameChange={setServerName}
             onPairingCodeChange={(value) => {
               setPairingCode(value)
               setAllowLoopback(false)
-              setServerError(null)
-            }}
-            onSubmit={() => void saveRemoteServer()}
-            onTunnelUrlChange={(value) => {
-              setTunnelUrl(value)
-              setServerError(null)
-            }}
-            onTunnelAccessTokenChange={(value) => {
-              setTunnelAccessToken(value)
-              setServerError(null)
             }}
             onAllowLoopbackChange={setAllowLoopback}
-            onUseVsCodeTunnelChange={setUseVsCodeTunnel}
+            onSubmit={() => void saveRemoteServer()}
             onCancel={close}
           />
         )}

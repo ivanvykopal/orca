@@ -305,19 +305,3 @@ export async function readOpenCodeTranscriptSignalViaWorker(
   }
   return value
 }
-
-/**
- * Read one OpenCode SQLite session and its whole transcript through the shared
- * worker client.
- * @param args.dbPath - Absolute path to the opencode.db file.
- * @param args.sessionId - Primary key in the `session` table.
- * @param args.platform - Platform used for resume-command generation.
- * @returns The session and every message it holds.
- */
-export function captureOpenCodeSqliteSessionViaWorker(args: {
-  dbPath: string
-  sessionId: string
-  platform: NodeJS.Platform
-}): Promise<OpenCodeSqliteCaptureValue> {
-  return getSharedClient().capture(args)
-}

@@ -9,7 +9,6 @@ import {
   requestStructuredAgentSessionMutation,
   timeoutForDeadline
 } from './mobile-structured-agent-session-rpc'
-import { structuredSessionOperationId } from './structured-session-operation-id'
 import { mobileStructuredSendDelivery } from './mobile-structured-send-delivery'
 import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 
