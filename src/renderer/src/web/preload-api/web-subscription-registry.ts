@@ -15,7 +15,7 @@ export function cancelWebRuntimeSubscription(subscriptionId: string): void {
 
 export async function subscribeWebRuntimeEnvironment(
   options: {
-    selector?: string
+    selector: string
     method: string
     params: unknown
     timeoutMs?: number
